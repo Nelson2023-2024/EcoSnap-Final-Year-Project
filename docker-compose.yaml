@@ -10,6 +10,18 @@ services:
       - /app/node_modules #Prevents the bind mount from modifying the node_modules in the container
     env_file:
       - ./backend/.env
+    depends_on:
+      - mongo-database
     
-  
-  
+  mongo-database:
+    image: mongo
+    volumes:
+      - ecosnap-mongo-volume:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    ports:
+      - 27019:21017
+
+volumes:
+  ecosnap-mongo-volume:
