@@ -1,0 +1,15 @@
+services:
+  econsnap-backend:
+    build:
+      context: ./backend/
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    volumes:
+      - ./backend:/app:ro # syncs code on local machine with container code
+      - /app/node_modules #Prevents the bind mount from modifying the node_modules in the container
+    env_file:
+      - ./backend/.env
+    
+  
+  

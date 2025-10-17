@@ -1,0 +1,12 @@
+services:
+  econsnap-backend:
+    build:
+      args:
+        - NODE_ENV=development
+    volumes:
+      - ./backend:/app:ro # syncs code on local machine with container code
+      - /app/node_modules #Prevents the bind mount from modifying the node_modules in the container
+    environment:
+      - NODE_ENV=development
+    command: ["npm", "run", "dev"]
+  
