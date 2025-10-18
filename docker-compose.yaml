@@ -1,10 +1,14 @@
 services:
+  nginx:
+    image: nginx
+    volumes:
+      - ./backend/src/nginx/default.conf:/etc/nginx/conf.d/default.conf
+
   econsnap-backend:
+    image: nelson254/ecosnap-backend
     build:
       context: ./backend/
       dockerfile: Dockerfile
-    ports:
-      - 8080:8080
     volumes:
       - ./backend:/app:ro # syncs code on local machine with container code
       - /app/node_modules #Prevents the bind mount from modifying the node_modules in the container
@@ -12,7 +16,7 @@ services:
       - ./backend/.env
     depends_on:
       - mongo-database
-    
+
   mongo-database:
     image: mongo
     volumes:
