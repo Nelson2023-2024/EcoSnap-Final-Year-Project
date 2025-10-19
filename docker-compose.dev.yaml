@@ -1,5 +1,10 @@
 services:
-  econsnap-backend:
+  nginx:
+    ports:
+      - 8080:80
+    volumes:
+      - ./backend/src/nginx/default.conf:/etc/nginx/conf.d/default.conf
+  ecosnap-backend:
     build:
       args:
         - NODE_ENV=development

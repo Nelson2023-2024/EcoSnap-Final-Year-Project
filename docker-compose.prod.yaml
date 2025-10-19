@@ -1,5 +1,9 @@
 services:
-  econsnap-backend:
+  nginx:
+    ports:
+      - 80:80
+
+  ecosnap-backend:
     build:
       args:
         - NODE_ENV=production
