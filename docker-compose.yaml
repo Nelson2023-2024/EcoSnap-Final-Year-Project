@@ -25,7 +25,15 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=root
     ports:
-      - 27019:21017
+      - 27019:27017
+  
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ecosnap-redis-volume:/data
 
 volumes:
   ecosnap-mongo-volume:
+  ecosnap-redis-volume:
