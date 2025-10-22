@@ -13,5 +13,8 @@ export const ENV = {
 
   //REDIS
   REDIS_URL:process.env.REDIS_URL,
-  REDIS_PORT:process.env.REDIS_PORT
+  REDIS_PORT:process.env.REDIS_PORT,
+
+  //GEMINI
+  GOOGLE_API_KEY:process.env.GOOGLE_API_KEY
 };
