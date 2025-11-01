@@ -6,8 +6,8 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
  * Analyze a waste image using Gemini AI
  * @param {Buffer} imageBuffer - Uploaded image buffer
- * @param {string} mimeType - Image MIME type (e.g., "image/jpeg")
- * @returns {Promise<Object>} - Clean structured JSON result
+ * @param {string} mimeType - Image MIME type
+ * @returns {Promise<Object>} - Structured JSON result
  */
 export const analyzeWasteImage = async (imageBuffer, mimeType) => {
   try {
@@ -24,15 +24,11 @@ export const analyzeWasteImage = async (imageBuffer, mimeType) => {
           ],
         },
       ],
-      config: {
-        temperature: 0.3, // more deterministic
-      },
+      config: { temperature: 0.3 },
     });
 
-    // 🧹 Clean AI response
     const rawText = response.text.replace(/```json|```/g, "").trim();
 
-    // 🧩 Parse and validate JSON
     let analysis;
     try {
       analysis = JSON.parse(rawText);

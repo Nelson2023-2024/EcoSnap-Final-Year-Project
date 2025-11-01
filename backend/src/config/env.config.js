@@ -3,7 +3,7 @@ configDotenv();
 
 export const ENV = {
   PORT: process.env.PORT,
-  MONGO_URI: process.env.MONGO_URI,
+  MONGO_URI: process.env.MONGO_URI, //mongodb://root:root@localhost:27019/EcoSnap?authSource=admin
   SESSION_SECRET: process.env.SESSION_SECRET,
 
   //GOOGLE AUTH

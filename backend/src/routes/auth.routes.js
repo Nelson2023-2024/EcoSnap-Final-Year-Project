@@ -26,11 +26,11 @@ router.get("/me", isAuthenticated, (req, res) => {
 
 router.get("/dev-login", async (req, res) => {
   const user = {
-    id: "68f688242a1be6be9cf213f7",
+    id: "69067633fbec6d2fa3fbb774",
     email: "nelsonobuya18@gmail.com",
   };
   req.login(user, (err) => {
-    if (err) return res.status(500).json({ message: "Login failed" });
+    if (err) return res.status(500).json({ message: "Login failed" , error: err.message});
     res.json({ message: "Dev login successful", user });
   });
 });

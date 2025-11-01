@@ -15,34 +15,29 @@ router.post(
   isAuthenticated,
   upload.single("image"),
   asyncHandler(async (req, res) => {
+    const authUser = req.user._id;
+
+    if (!req.file) return res.status(400).json({ message: "No image uploaded" });
+
+    const { latitude, longitude, address } = req.body;
+
     try {
-      const authUser = req.user._id;
+      // 🔹 Analyze image
+      const analysis = await analyzeWasteImage(req.file.buffer, req.file.mimetype);
 
-      if (!req.file) {
-        return res.status(400).json({ message: "No image uploaded" });
-      }
-
-      const { latitude, longitude, address } = req.body;
-
-      // 🔹 Analyze image using Gemini
-      const analysis = await analyzeWasteImage(
-        req.file.buffer,
-        req.file.mimetype
-      );
-
-      // 🔹 Save result to MongoDB
+      // 🔹 Save to DB
       const wasteDoc = await wasteAnalysis.create({
         analysedBy: authUser,
         imageURL: `data:${req.file.mimetype};base64,${analysis.imageBase64}`,
         containsWaste: analysis.containsWaste,
         wasteCategories: analysis.wasteCategories || [],
+        dominantWasteType: analysis.dominantWasteType || null,
+        estimatedVolume: analysis.estimatedVolume || { value: 0, unit: "kg" },
         possibleSource: analysis.possibleSource || "Unknown",
         environmentalImpact: analysis.environmentalImpact || "Not assessed",
         confidenceLevel: analysis.confidenceLevel || "0%",
-        status: analysis.containsWaste ? "valid" : "no_waste",
-        errorMessage:
-          analysis.errorMessage ||
-          (analysis.containsWaste ? null : "No visible waste detected."),
+        status: analysis.containsWaste ? "pending_dispatch" : "no_waste",
+        errorMessage: analysis.errorMessage || null,
         location: {
           type: "Point",
           coordinates: [parseFloat(longitude), parseFloat(latitude)],
@@ -50,7 +45,7 @@ router.post(
         },
       });
 
-      // 🔹 Notify user about successful waste report
+      // 🔹 Notify user
       await Notification.create({
         user: authUser,
         type: "waste_report",
@@ -61,24 +56,23 @@ router.post(
         metadata: { wasteId: wasteDoc._id },
       });
 
-      // 🎯 Award points for valid waste detection
+      // 🔹 Award points
       const pointsEarned = analysis.containsWaste ? 10 : 0;
-
-      // 🔹 Update user's total points
       const updatedUser = await User.findByIdAndUpdate(
         authUser,
         { $inc: { points: pointsEarned } },
         { new: true }
       );
 
-      // 🔹 Log the reward
       const reward = await Reward.create({
         user: authUser,
+        wasteAnalysisId: wasteDoc._id,
         pointsEarned,
         reason: "waste_report",
+        transactionType: "credit",
       });
 
-      // 🔹 Notification for reward earned
+      // 🔹 Notify reward
       await Notification.create({
         user: authUser,
         type: "reward_earned",
@@ -89,23 +83,22 @@ router.post(
         metadata: { rewardId: reward._id },
       });
 
-      // 🏆 Bonus logic — if user reaches 100 points for first time
-      if (updatedUser.points >= 100 && updatedUser.points < 150) {
-        await User.findByIdAndUpdate(authUser, { $inc: { points: 50 } });
+      // 🔹 Bonus for milestone
+      if (updatedUser.points >= 100 && updatedUser.points - pointsEarned < 100) {
+        const bonusPoints = 50;
+        await User.findByIdAndUpdate(authUser, { $inc: { points: bonusPoints } });
         const bonusReward = await Reward.create({
           user: authUser,
-          pointsEarned: 50,
-          reason: "bonus_awarded",
-          status: "earned",
+          pointsEarned: bonusPoints,
+          reason: "bonus",
+          transactionType: "credit",
         });
 
-        // 🔹 Notification for bonus
         await Notification.create({
           user: authUser,
           type: "bonus_awarded",
           title: "Bonus Unlocked! 🏅",
-          message:
-            "Congratulations! You’ve reached 100 points and earned a 50-point bonus reward!",
+          message: `Congratulations! You reached 100 points and earned a ${bonusPoints}-point bonus!`,
           relatedModel: "Reward",
           relatedId: bonusReward._id,
           metadata: { rewardId: bonusReward._id },
@@ -119,16 +112,15 @@ router.post(
         pointsAwarded: pointsEarned,
       });
     } catch (error) {
-      console.error("AI analysis error:", error.message);
+      console.error("Waste analysis error:", error.message);
 
-      // 🔹 Save failed analysis attempt
       const failedDoc = await wasteAnalysis.create({
-        analysedBy: req.user._id,
-        imageURL: `data:${
-          req.file?.mimetype
-        };base64,${req.file?.buffer?.toString("base64")}`,
+        analysedBy: authUser,
+        imageURL: `data:${req.file?.mimetype};base64,${req.file?.buffer?.toString("base64")}`,
         containsWaste: false,
         wasteCategories: [],
+        dominantWasteType: null,
+        estimatedVolume: { value: 0, unit: "kg" },
         possibleSource: "N/A",
         environmentalImpact: "N/A",
         confidenceLevel: "0%",
@@ -137,20 +129,18 @@ router.post(
         location: {
           type: "Point",
           coordinates: [
-            parseFloat(req.body.longitude) || 0,
-            parseFloat(req.body.latitude) || 0,
+            parseFloat(longitude) || 0,
+            parseFloat(latitude) || 0,
           ],
-          address: req.body.address || "Unknown",
+          address: address || "Unknown",
         },
       });
 
-      // 🔹 Notify user of analysis failure
       await Notification.create({
-        user: req.user._id,
+        user: authUser,
         type: "system",
         title: "Waste Analysis Failed ❌",
-        message:
-          "We encountered an error analyzing your image. Please try again later.",
+        message: "We encountered an error analyzing your image. Please try again later.",
         relatedModel: "WasteAnalysis",
         relatedId: failedDoc._id,
         metadata: { error: error.message },

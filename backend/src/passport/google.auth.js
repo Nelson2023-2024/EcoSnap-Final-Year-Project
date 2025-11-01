@@ -2,7 +2,7 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import asyncHandler from "express-async-handler";
 import passport from "passport";
 import { ENV } from "../config/env.config.js";
-import { User } from "../models/User.model.js";
+import { User } from "../models/user.model.js";
 
 //get the user from the GoogleStrategy
 passport.serializeUser((user, done) => {
@@ -16,7 +16,7 @@ passport.deserializeUser(async (id, done) => {
     const findUser = await User.findById(id);
     return findUser ? done(null, findUser) : done(null, null);
   } catch (error) {
-    done(err, null);
+    done(error, null);
   }
 });
 
