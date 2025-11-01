@@ -43,7 +43,7 @@ const userSchema = new mongoose.Schema(
     points: {
       type: Number,
       trim: true,
-      default: 0
+      default: 0,
     },
     //Used to search for the user safely
     googleID: {
@@ -55,9 +55,18 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    role: {
+      type: String,
+      enum: ["user", "admin", "collector"],
+      default: "user",
+    },
+    assignedTeam: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Team",
+    },
   },
+
   { timestamps: true }
 );
 
-export const User =
-  mongoose.models.User || mongoose.model("User", userSchema);
+export const User = mongoose.models.User || mongoose.model("User", userSchema);

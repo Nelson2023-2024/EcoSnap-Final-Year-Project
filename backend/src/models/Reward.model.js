@@ -8,6 +8,10 @@ const rewardSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    wasteAnalysisId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "WasteAnalysis",
+    },
     pointsEarned: {
       type: Number,
       default: 0,
@@ -17,10 +21,10 @@ const rewardSchema = new mongoose.Schema(
       enum: ["waste_report", "cleanup_verified", "bonus", "redemption"],
       default: "waste_report",
     },
-    status: {
+    transactionType: {
       type: String,
-      enum: ["earned", "redeemed"],
-      default: "earned",
+      enum: ["credit", "debit"],
+      default: "credit",
     },
   },
   { timestamps: true }

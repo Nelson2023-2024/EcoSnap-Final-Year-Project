@@ -29,6 +29,18 @@ const wasteAnalysisSchema = new mongoose.Schema(
         },
       },
     ],
+    // Overall analysis
+    dominantWasteType: {
+      type: String,
+    },
+    estimatedVolume: {
+      value: Number,
+      unit: {
+        type: String,
+        enum: ["kg", "liters", "cubic_meters"],
+        default: "kg",
+      },
+    },
     possibleSource: {
       type: String,
       trim: true,
@@ -43,8 +55,14 @@ const wasteAnalysisSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["valid", "no_waste", "error"],
-      default: "valid",
+      enum: [
+        "pending_dispatch",
+        "dispatched",
+        "collected",
+        "no_waste",
+        "error",
+      ],
+      default: "pending_dispatch",
     },
     errorMessage: {
       type: String,
