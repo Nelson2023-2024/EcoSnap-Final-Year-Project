@@ -6,6 +6,9 @@ const teamSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    teamURL: {
+      type: String,
+    },
     members: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -15,6 +18,7 @@ const teamSchema = new mongoose.Schema(
     specialization: {
       type: String,
       enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],
+      default: "general",
     },
     status: {
       type: String,

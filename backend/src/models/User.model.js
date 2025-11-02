@@ -60,13 +60,16 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "admin", "collector"],
       default: "user",
     },
-    assignedTeam: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Team",
-    },
+    // Now, a user can be assigned to multiple teams
+    assignedTeams: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Team",
+      },
+    ],
   },
 
   { timestamps: true }
 );
 
-export const User =  mongoose.model("User", userSchema);
+export const User = mongoose.models.User || mongoose.model("User", userSchema);
