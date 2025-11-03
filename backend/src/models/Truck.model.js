@@ -8,6 +8,9 @@ const truckSchema = new mongoose.Schema(
       unique: true,
       uppercase: true,
     },
+    imageURL: {
+      type: String,
+    },
     truckType: {
       type: String,
       enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],

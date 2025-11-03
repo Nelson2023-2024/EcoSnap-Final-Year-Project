@@ -20,6 +20,13 @@ const teamSchema = new mongoose.Schema(
       enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],
       default: "general",
     },
+    trucks: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Truck",
+      },
+    ],
+
     status: {
       type: String,
       enum: ["active", "off_duty"],
