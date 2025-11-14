@@ -12,7 +12,8 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export const analyzeWasteImage = async (imageBuffer, mimeType) => {
   try {
     const imageBase64 = imageBuffer.toString("base64");
-
+// gemini-2.0-flash-lite
+//gemini-2.5-flash
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
