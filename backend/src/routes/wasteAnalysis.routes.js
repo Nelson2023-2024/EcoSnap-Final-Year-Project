@@ -7,6 +7,8 @@ import { User } from "../models/user.model.js";
 import { Reward } from "../models/Reward.model.js";
 import { analyzeWasteImage } from "../lib/gemini.process.js";
 import { Notification } from "../models/Notification.model.js";
+import { uploadToS3 } from "../lib/upload.s3.js";
+import { ENV } from "../config/env.config.js";
 
 const router = Router();
 
@@ -22,13 +24,21 @@ router.post(
     const { latitude, longitude, address } = req.body;
 
     try {
+
+      // 🔹 Upload image to S3
+      const { key, fileURL } = await uploadToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        ENV.S3BUCKET_FOLDER_NAME
+      );
       // 🔹 Analyze image
       const analysis = await analyzeWasteImage(req.file.buffer, req.file.mimetype);
 
       // 🔹 Save to DB
       const wasteDoc = await wasteAnalysis.create({
         analysedBy: authUser,
-        imageURL: `data:${req.file.mimetype};base64,${analysis.imageBase64}`,
+        imageURL: fileURL,
         containsWaste: analysis.containsWaste,
         wasteCategories: analysis.wasteCategories || [],
         dominantWasteType: analysis.dominantWasteType || null,
