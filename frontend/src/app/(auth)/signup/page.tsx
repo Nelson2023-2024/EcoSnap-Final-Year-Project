@@ -1,6 +1,6 @@
 "use client";
 
-import { MailIcon } from "lucide-react";
+import { Loader2, MailIcon } from "lucide-react";
 import Link from "next/link";
 import {
   Card,
@@ -10,11 +10,43 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useGoogleLogin } from "@/hooks/useAuth";
+import { useAuthUser, useGoogleLogin } from "@/hooks/useAuth";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function SignUpForm() {
   //login with google
   const { loginWithGoogle } = useGoogleLogin();
+
+   const { data: user, isLoading } = useAuthUser();
+    const router = useRouter();
+  
+    // Redirect if already authenticated
+    useEffect(() => {
+      if (!isLoading && user) {
+        // Redirect based on role
+        if (user.role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/user-dashboard");
+        }
+      }
+    }, [user, isLoading, router]);
+  
+    // Show loading state
+    if (isLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eco-primary/10 via-background to-eco-success/10">
+          <Loader2 className="h-12 w-12 animate-spin text-eco-primary" />
+        </div>
+      );
+    }
+  
+    // Don't render login form if user is authenticated
+    if (user) {
+      return null;
+    }
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eco-primary/10 via-background to-eco-success/10 pt-16">
