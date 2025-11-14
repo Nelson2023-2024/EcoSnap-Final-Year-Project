@@ -1,12 +1,15 @@
 // import AdminSidebar from "@/components/layout/AdminSidebar";
 
+import ProtectedRoute from "@/components/ProtectedRoute";
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <ProtectedRoute requiredRole="admin">
+       <div className="flex h-screen overflow-hidden">
       {/* <AdminSidebar /> */}
       <main className="flex-1 overflow-y-auto bg-background">
         <div className="container mx-auto p-6">
@@ -14,5 +17,7 @@ export default function AdminLayout({
         </div>
       </main>
     </div>
+    </ProtectedRoute>
+   
   );
 }
