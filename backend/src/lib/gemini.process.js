@@ -15,7 +15,7 @@ export const analyzeWasteImage = async (imageBuffer, mimeType) => {
 // gemini-2.0-flash-lite
 //gemini-2.5-flash
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         {
           role: "user",
