@@ -9,6 +9,7 @@ import { analyzeWasteImage } from "../lib/gemini.process.js";
 import { Notification } from "../models/Notification.model.js";
 import { uploadToS3 } from "../lib/upload.s3.js";
 import { ENV } from "../config/env.config.js";
+import { uploadToCloudinary } from "../lib/upload.cloudinary.js";
 
 const router = Router();
 
@@ -19,26 +20,35 @@ router.post(
   asyncHandler(async (req, res) => {
     const authUser = req.user._id;
 
-    if (!req.file) return res.status(400).json({ message: "No image uploaded" });
+    if (!req.file)
+      return res.status(400).json({ message: "No image uploaded" });
 
     const { latitude, longitude, address } = req.body;
 
-    try {
+    let imageURL = null;
 
+    try {
       // 🔹 Upload image to S3
-      const { key, fileURL } = await uploadToS3(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype,
-        ENV.S3BUCKET_FOLDER_NAME
-      );
+      // const { key, fileURL } = await uploadToS3(
+      //   req.file.buffer,
+      //   req.file.originalname,
+      //   req.file.mimetype,
+      //   ENV.S3BUCKET_FOLDER_NAME
+      // );
+
+      // Upload image to cloudinary
+      imageURL = await uploadToCloudinary(req.file);
+
       // 🔹 Analyze image
-      const analysis = await analyzeWasteImage(req.file.buffer, req.file.mimetype);
+      const analysis = await analyzeWasteImage(
+        req.file.buffer,
+        req.file.mimetype
+      );
 
       // 🔹 Save to DB
       const wasteDoc = await wasteAnalysis.create({
         analysedBy: authUser,
-        imageURL: fileURL,
+        imageURL: imageURL,
         containsWaste: analysis.containsWaste,
         wasteCategories: analysis.wasteCategories || [],
         dominantWasteType: analysis.dominantWasteType || null,
@@ -94,9 +104,14 @@ router.post(
       });
 
       // 🔹 Bonus for milestone
-      if (updatedUser.points >= 100 && updatedUser.points - pointsEarned < 100) {
+      if (
+        updatedUser.points >= 100 &&
+        updatedUser.points - pointsEarned < 100
+      ) {
         const bonusPoints = 50;
-        await User.findByIdAndUpdate(authUser, { $inc: { points: bonusPoints } });
+        await User.findByIdAndUpdate(authUser, {
+          $inc: { points: bonusPoints },
+        });
         const bonusReward = await Reward.create({
           user: authUser,
           pointsEarned: bonusPoints,
@@ -126,7 +141,7 @@ router.post(
 
       const failedDoc = await wasteAnalysis.create({
         analysedBy: authUser,
-        imageURL: `data:${req.file?.mimetype};base64,${req.file?.buffer?.toString("base64")}`,
+        imageURL: imageURL,
         containsWaste: false,
         wasteCategories: [],
         dominantWasteType: null,
@@ -138,10 +153,7 @@ router.post(
         errorMessage: error.message,
         location: {
           type: "Point",
-          coordinates: [
-            parseFloat(longitude) || 0,
-            parseFloat(latitude) || 0,
-          ],
+          coordinates: [parseFloat(longitude) || 0, parseFloat(latitude) || 0],
           address: address || "Unknown",
         },
       });
@@ -150,7 +162,8 @@ router.post(
         user: authUser,
         type: "system",
         title: "Waste Analysis Failed ❌",
-        message: "We encountered an error analyzing your image. Please try again later.",
+        message:
+          "We encountered an error analyzing your image. Please try again later.",
         relatedModel: "WasteAnalysis",
         relatedId: failedDoc._id,
         metadata: { error: error.message },
@@ -164,6 +177,41 @@ router.post(
         data: failedDoc,
       });
     }
+  })
+);
+
+//get authUser waste analysis history
+router.get(
+  "/",
+  isAuthenticated,
+  asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    // Get page & limit from query params
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    // Get user-specific records
+    const [results, total] = await Promise.all([
+      wasteAnalysis
+        .find({ analysedBy: userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+
+      wasteAnalysis.countDocuments({ analysedBy: userId }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: results,
+    });
   })
 );
 
