@@ -13,10 +13,14 @@ app.use(
   cors({
     origin: ENV.FRONTEND_URL || "http://localhost:3000", // your frontend URL
     credentials: true, // allows cookies to be sent cross-origin
+     allowedHeaders: ['Content-Type', 'Authorization']
   })
 );
 
-app.use(express.json());
+// Increase the limit (e.g., to 50MB)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 app.use(sessionMiddleware);
 
 //Intializes Passport for incoming requests, allowing authentication strategies to be applied.
