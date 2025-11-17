@@ -215,4 +215,32 @@ router.get(
   })
 );
 
+router.get(
+  "/:id",
+  isAuthenticated,
+  asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    const { id } = req.params;
+
+    // Find item by ID and ensure it belongs to this user
+    const analysis = await wasteAnalysis.findOne({
+      _id: id,
+      analysedBy: userId,
+    });
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: "Waste analysis report not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: analysis,
+    });
+  })
+);
+
 export { router as wasteAnalysisRoutes };
