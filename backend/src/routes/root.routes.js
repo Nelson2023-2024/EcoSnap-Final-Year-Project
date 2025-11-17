@@ -5,6 +5,7 @@ import { teamRoutes } from "./team.routes.js";
 import { collectorRoutes } from "./collector.routes.js";
 import { truckRoutes } from "./Truck.routes.js";
 import { dispatchRoutes } from "./Dispatch.routes.js";
+import { productRoutes } from "./product.routes.js";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/teams", teamRoutes);
 router.use("/collector", collectorRoutes);
 router.use("/truck",truckRoutes );
 router.use("/dispatch",dispatchRoutes);
+router.use("/product",productRoutes);
 
 export { router as rootRouter };
