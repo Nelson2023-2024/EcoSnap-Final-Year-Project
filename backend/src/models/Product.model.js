@@ -1,68 +1,53 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema(
   {
-    name: {
+    product_id: {
+      type: String,
+    },
+    product_name: {
       type: String,
       required: true,
       trim: true,
     },
-    slug: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-    },
-    description: {
+
+    product_description: {
       type: String,
       trim: true,
     },
-    category: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+
+    product_imageURL: {
+      type: String,
+      required: true, // one primary image is enough
     },
-    pointsCost: {
+
+    product_pointsCost: {
       type: Number,
       required: true,
       min: 0,
     },
-    images: [
-      {
-        url: String,
-        isPrimary: {
-          type: Boolean,
-          default: false,
-        },
-      },
-    ],
-    stock: {
+
+    product_stock: {
       type: Number,
       default: 0,
       min: 0,
     },
-    isAvailable: {
+
+    product_isAvailable: {
       type: Boolean,
       default: true,
     },
-    // Product specifications (flexible for different product types)
-    specifications: {
-      type: Map,
-      of: String,
-      // Examples:
-      // For tree seedlings: { height: "30cm", age: "6 months", species: "Mango" }
-      // For bins: { capacity: "50L", material: "Recycled plastic", color: "Green" }
+    product_createdAt: {
+      type: Date,
+      default: Date.now(),
     },
-    displayOrder: {
-      type: Number,
-      default: 0,
+    product_updatedAt: {
+      type: Date,
+      default: Date.now(),
     },
   },
-  { timestamps: true }
 );
 
-productSchema.index({ category: 1, isAvailable: 1 });
-productSchema.index({ slug: 1 });
-productSchema.index({ pointsCost: 1 });
+
 
 export const Product = mongoose.model("Product", productSchema);
