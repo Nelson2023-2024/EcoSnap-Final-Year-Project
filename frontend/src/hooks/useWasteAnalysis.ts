@@ -1,5 +1,5 @@
 import { API_URL } from "@/lib/api-url";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
 // Types
@@ -54,6 +54,11 @@ interface AnalyzeWasteParams {
   latitude: number;
   longitude: number;
   address: string;
+}
+
+interface SingleWasteAnalysisResponse {
+  success: boolean;
+  data: WasteAnalysisItem;
 }
 
 // -------------------- Mutation: Analyze Waste --------------------
@@ -126,5 +131,29 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
       return lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined;
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+}
+
+
+export function useWasteAnalysis(id: string | undefined) {
+  return useQuery<WasteAnalysisItem, Error>({
+    queryKey: ["wasteAnalysis", id],
+    enabled: !!id, // Prevents running before id exists
+
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/waste-analysis/${id}`, {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to fetch report");
+      }
+
+      const json: SingleWasteAnalysisResponse = await res.json();
+      return json.data;
+    },
+
+    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
   });
 }
