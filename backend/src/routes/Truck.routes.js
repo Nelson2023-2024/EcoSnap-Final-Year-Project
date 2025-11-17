@@ -18,22 +18,24 @@ router.post(
     const { registrationNumber, truckType, capacity, assignedTeam, imageURL } =
       req.body;
 
-    // Validate required fields
     if (!registrationNumber || !truckType || !capacity)
       return res.status(400).json({
         success: false,
         message: "Registration number, truck type, and capacity are required",
       });
 
-    // Prevent duplicate truck registration number
-    const existingTruck = await Truck.findOne({ registrationNumber });
+    // Check duplicate using prefixed name
+    const existingTruck = await Truck.findOne({
+      truck_registrationNumber: registrationNumber,
+    });
+
     if (existingTruck)
       return res.status(400).json({
         success: false,
         message: "Truck with this registration number already exists",
       });
 
-    // Validate team if provided
+    // Validate team if exists
     let team = null;
     if (assignedTeam) {
       team = await Team.findById(assignedTeam);
@@ -45,23 +47,22 @@ router.post(
       }
     }
 
-    // Create truck
+    // Create truck using prefixed fields
     const truck = await Truck.create({
-      registrationNumber,
-      truckType,
-      capacity,
-      assignedTeam,
-      imageURL, // storing the image URL for the truck
+      truck_registrationNumber: registrationNumber,
+      truck_truckType: truckType,
+      truck_capacity: capacity,
+      truck_assignedTeam: assignedTeam,
+      truck_imageURL: imageURL,
     });
 
-    // If truck assigned to a team, notify the team and update members
+    // Assign to team + notify
     if (assignedTeam && team) {
       team.trucks.push(truck._id);
       await team.save();
 
-      // Notify team about truck assignment
       await Notification.create({
-        user: assignedTeam, // Assuming the team admin is notified
+        user: assignedTeam,
         type: "truck_status",
         title: "New Truck Assigned 🚚",
         message: `The truck with registration number ${registrationNumber} has been assigned to your team.`,
@@ -85,7 +86,7 @@ router.get(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const trucks = await Truck.find().populate("assignedTeam", "name");
+    const trucks = await Truck.find().populate("truck_assignedTeam", "team_name");
 
     if (trucks.length === 0) {
       return res.status(404).json({
@@ -102,14 +103,14 @@ router.get(
   })
 );
 
-// Get specific truck by ID
+// Get one truck
 router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const truck = await Truck.findById(req.params.id).populate(
-      "assignedTeam",
-      "name"
+      "truck_assignedTeam",
+      "team_name"
     );
 
     if (!truck) {
@@ -126,7 +127,7 @@ router.get(
   })
 );
 
-// Update truck details
+// Update truck
 router.put(
   "/:id",
   isAuthenticated,
@@ -143,7 +144,6 @@ router.put(
 
     const { id } = req.params;
 
-    // ✅ Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({
         success: false,
@@ -159,13 +159,14 @@ router.put(
       });
     }
 
-    // Update truck details
-    if (registrationNumber) truck.registrationNumber = registrationNumber;
-    if (truckType) truck.truckType = truckType;
-    if (capacity) truck.capacity = capacity;
-    if (status) truck.status = status;
-    if (assignedTeam) truck.assignedTeam = assignedTeam;
-    if (imageURL) truck.imageURL = imageURL;
+    // Apply updates to prefixed fields
+    if (registrationNumber)
+      truck.truck_registrationNumber = registrationNumber;
+    if (truckType) truck.truck_truckType = truckType;
+    if (capacity) truck.truck_capacity = capacity;
+    if (status) truck.truck_status = status;
+    if (assignedTeam) truck.truck_assignedTeam = assignedTeam;
+    if (imageURL) truck.truck_imageURL = imageURL;
 
     await truck.save();
 
@@ -185,7 +186,6 @@ router.delete(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    // ✅ Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({
         success: false,
@@ -201,21 +201,19 @@ router.delete(
       });
     }
 
-    // ✅ If truck is assigned to a team, unassign it safely using $pull
-    if (truck.assignedTeam) {
-      const team = await Team.findById(truck.assignedTeam);
-
+    // Unassign from team if exists
+    if (truck.truck_assignedTeam) {
+      const team = await Team.findById(truck.truck_assignedTeam);
       if (team) {
         await Team.findByIdAndUpdate(team._id, {
-          $pull: { trucks: truck._id }, // removes truck ID from team's array
+          $pull: { trucks: truck._id },
         });
 
-        // Optionally, send a notification to the team
         await Notification.create({
-          user: truck.assignedTeam,
+          user: truck.truck_assignedTeam,
           type: "truck_status",
           title: "Truck Unassigned ❌",
-          message: `The truck ${truck.registrationNumber} has been unassigned from your team.`,
+          message: `The truck ${truck.truck_registrationNumber} has been unassigned from your team.`,
           relatedModel: "Truck",
           relatedId: truck._id,
         });
@@ -230,4 +228,5 @@ router.delete(
     });
   })
 );
+
 export { router as truckRoutes };
