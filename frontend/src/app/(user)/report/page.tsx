@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Upload, Loader2 } from "lucide-react";
+import { Camera, MapPin, Upload, LoaderIcon } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useAnalyzeWaste } from "@/hooks/useWasteAnalysis";
 
@@ -199,7 +199,7 @@ const ReportWaste = () => {
               >
                 {isAnalyzing ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <LoaderIcon className="mr-2 h-5 w-5 animate-spin" />
                     Analyzing...
                   </>
                 ) : (
@@ -225,7 +225,7 @@ const ReportWaste = () => {
 
             {isAnalyzing && (
               <div className="flex flex-col items-center justify-center h-64">
-                <Loader2 className="h-12 w-12 animate-spin text-eco-primary mb-4" />
+                <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary mb-4" />
                 <p className="text-muted-foreground">Analyzing waste materials...</p>
               </div>
             )}
