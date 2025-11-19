@@ -24,7 +24,7 @@ router.post(
         message: "Registration number, truck type, and capacity are required",
       });
 
-    // Check duplicate using prefixed name
+    // Check duplicate
     const existingTruck = await Truck.findOne({
       truck_registrationNumber: registrationNumber,
     });
@@ -35,7 +35,7 @@ router.post(
         message: "Truck with this registration number already exists",
       });
 
-    // Validate team if exists
+    // Validate team
     let team = null;
     if (assignedTeam) {
       team = await Team.findById(assignedTeam);
@@ -47,7 +47,7 @@ router.post(
       }
     }
 
-    // Create truck using prefixed fields
+    // Create truck
     const truck = await Truck.create({
       truck_registrationNumber: registrationNumber,
       truck_truckType: truckType,
@@ -56,9 +56,9 @@ router.post(
       truck_imageURL: imageURL,
     });
 
-    // Assign to team + notify
+    // Assign truck to team
     if (assignedTeam && team) {
-      team.trucks.push(truck._id);
+      team.team_trucks.push(truck._id);
       await team.save();
 
       await Notification.create({
@@ -86,7 +86,10 @@ router.get(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const trucks = await Truck.find().populate("truck_assignedTeam", "team_name");
+    const trucks = await Truck.find().populate(
+      "truck_assignedTeam",
+      "team_name team_status team_specialization"
+    );
 
     if (trucks.length === 0) {
       return res.status(404).json({
@@ -110,7 +113,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const truck = await Truck.findById(req.params.id).populate(
       "truck_assignedTeam",
-      "team_name"
+      "team_name team_status team_specialization"
     );
 
     if (!truck) {
@@ -159,7 +162,7 @@ router.put(
       });
     }
 
-    // Apply updates to prefixed fields
+    // Apply updates
     if (registrationNumber)
       truck.truck_registrationNumber = registrationNumber;
     if (truckType) truck.truck_truckType = truckType;
@@ -201,12 +204,13 @@ router.delete(
       });
     }
 
-    // Unassign from team if exists
+    // Unassign from team
     if (truck.truck_assignedTeam) {
       const team = await Team.findById(truck.truck_assignedTeam);
+
       if (team) {
         await Team.findByIdAndUpdate(team._id, {
-          $pull: { trucks: truck._id },
+          $pull: { team_trucks: truck._id },
         });
 
         await Notification.create({

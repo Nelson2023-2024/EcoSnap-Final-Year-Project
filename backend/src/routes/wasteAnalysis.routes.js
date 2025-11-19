@@ -7,11 +7,44 @@ import { User } from "../models/user.model.js";
 import { Reward } from "../models/Reward.model.js";
 import { analyzeWasteImage } from "../lib/gemini.process.js";
 import { Notification } from "../models/Notification.model.js";
-import { uploadToS3 } from "../lib/upload.s3.js";
-import { ENV } from "../config/env.config.js";
 import { uploadToCloudinary } from "../lib/upload.cloudinary.js";
 
 const router = Router();
+
+// Helper function to transform DB document to frontend format
+const transformWasteAnalysis = (doc) => {
+  if (!doc) return null;
+  
+  const obj = doc.toObject ? doc.toObject() : doc;
+  
+  return {
+    _id: obj._id,
+    analysedBy: obj.waste_analysedBy,
+    imageURL: obj.waste_imageURL,
+    containsWaste: obj.waste_containsWaste,
+    wasteCategories: obj.waste_wasteCategories?.map(cat => ({
+      type: cat.waste_type,
+      estimatedPercentage: cat.waste_estimatedPercentage
+    })) || [],
+    dominantWasteType: obj.waste_dominantWasteType,
+    estimatedVolume: obj.waste_estimatedVolume ? {
+      value: obj.waste_estimatedVolume.waste_value,
+      unit: obj.waste_estimatedVolume.waste_unit
+    } : null,
+    possibleSource: obj.waste_possibleSource,
+    environmentalImpact: obj.waste_environmentalImpact,
+    confidenceLevel: obj.waste_confidenceLevel,
+    status: obj.waste_status,
+    errorMessage: obj.waste_errorMessage,
+    location: obj.waste_location ? {
+      type: obj.waste_location.waste_type,
+      coordinates: obj.waste_location.waste_coordinates,
+      address: obj.waste_location.waste_address
+    } : null,
+    createdAt: obj.waste_createdAt || obj.createdAt,
+    updatedAt: obj.waste_updatedAt || obj.updatedAt
+  };
+};
 
 router.post(
   "/",
@@ -28,44 +61,40 @@ router.post(
     let imageURL = null;
 
     try {
-      // 🔹 Upload image to S3
-      // const { key, fileURL } = await uploadToS3(
-      //   req.file.buffer,
-      //   req.file.originalname,
-      //   req.file.mimetype,
-      //   ENV.S3BUCKET_FOLDER_NAME
-      // );
-
       // Upload image to cloudinary
       imageURL = await uploadToCloudinary(req.file);
 
-      // 🔹 Analyze image
+      // Analyze image
       const analysis = await analyzeWasteImage(
         req.file.buffer,
         req.file.mimetype
       );
 
-      // 🔹 Save to DB
+      // Save to DB
       const wasteDoc = await wasteAnalysis.create({
-        analysedBy: authUser,
-        imageURL: imageURL,
-        containsWaste: analysis.containsWaste,
-        wasteCategories: analysis.wasteCategories || [],
-        dominantWasteType: analysis.dominantWasteType || null,
-        estimatedVolume: analysis.estimatedVolume || { value: 0, unit: "kg" },
-        possibleSource: analysis.possibleSource || "Unknown",
-        environmentalImpact: analysis.environmentalImpact || "Not assessed",
-        confidenceLevel: analysis.confidenceLevel || "0%",
-        status: analysis.containsWaste ? "pending_dispatch" : "no_waste",
-        errorMessage: analysis.errorMessage || null,
-        location: {
-          type: "Point",
-          coordinates: [parseFloat(longitude), parseFloat(latitude)],
-          address: address || "Unknown",
+        waste_analysedBy: authUser,
+        waste_imageURL: imageURL,
+        waste_containsWaste: analysis.containsWaste,
+        waste_wasteCategories: analysis.wasteCategories || [],
+        waste_dominantWasteType: analysis.dominantWasteType || null,
+        waste_estimatedVolume: {
+          waste_value: analysis.estimatedVolume?.value || 0,
+          waste_unit: analysis.estimatedVolume?.unit || "kg",
+        },
+        waste_possibleSource: analysis.possibleSource || "Unknown",
+        waste_environmentalImpact:
+          analysis.environmentalImpact || "Not assessed",
+        waste_confidenceLevel: analysis.confidenceLevel || "0%",
+        waste_status: analysis.containsWaste ? "pending_dispatch" : "no_waste",
+        waste_errorMessage: analysis.errorMessage || null,
+        waste_location: {
+          waste_type: "Point",
+          waste_coordinates: [parseFloat(longitude), parseFloat(latitude)],
+          waste_address: address || "Unknown",
         },
       });
 
-      // 🔹 Notify user
+      // Notify user
       await Notification.create({
         user: authUser,
         type: "waste_report",
@@ -76,7 +105,7 @@ router.post(
         metadata: { wasteId: wasteDoc._id },
       });
 
-      // 🔹 Award points
+      // Award points
       const pointsEarned = analysis.containsWaste ? 10 : 0;
       const updatedUser = await User.findByIdAndUpdate(
         authUser,
@@ -92,7 +121,7 @@ router.post(
         transactionType: "credit",
       });
 
-      // 🔹 Notify reward
+      // Notify reward
       await Notification.create({
         user: authUser,
         type: "reward_earned",
@@ -103,7 +132,7 @@ router.post(
         metadata: { rewardId: reward._id },
       });
 
-      // 🔹 Bonus for milestone
+      // Bonus for milestone
       if (
         updatedUser.points >= 100 &&
         updatedUser.points - pointsEarned < 100
@@ -130,31 +159,40 @@ router.post(
         });
       }
 
+      // Transform before sending to frontend
+      const transformedData = transformWasteAnalysis(wasteDoc);
+
       res.status(201).json({
         success: true,
         message: "Waste analysis completed successfully",
-        data: wasteDoc,
+        data: transformedData,
         pointsAwarded: pointsEarned,
       });
     } catch (error) {
       console.error("Waste analysis error:", error.message);
 
       const failedDoc = await wasteAnalysis.create({
-        analysedBy: authUser,
-        imageURL: imageURL,
-        containsWaste: false,
-        wasteCategories: [],
-        dominantWasteType: null,
-        estimatedVolume: { value: 0, unit: "kg" },
-        possibleSource: "N/A",
-        environmentalImpact: "N/A",
-        confidenceLevel: "0%",
-        status: "error",
-        errorMessage: error.message,
-        location: {
-          type: "Point",
-          coordinates: [parseFloat(longitude) || 0, parseFloat(latitude) || 0],
-          address: address || "Unknown",
+        waste_analysedBy: authUser,
+        waste_imageURL: imageURL,
+        waste_containsWaste: false,
+        waste_wasteCategories: [],
+        waste_dominantWasteType: null,
+        waste_estimatedVolume: {
+          waste_value: 0,
+          waste_unit: "kg",
+        },
+        waste_possibleSource: "N/A",
+        waste_environmentalImpact: "N/A",
+        waste_confidenceLevel: "0%",
+        waste_status: "error",
+        waste_errorMessage: error.message,
+        waste_location: {
+          waste_type: "Point",
+          waste_coordinates: [
+            parseFloat(longitude) || 0,
+            parseFloat(latitude) || 0,
+          ],
+          waste_address: address || "Unknown",
         },
       });
 
@@ -170,39 +208,43 @@ router.post(
         priority: "high",
       });
 
+      // Transform before sending to frontend
+      const transformedFailedData = transformWasteAnalysis(failedDoc);
+
       res.status(500).json({
         success: false,
         message: "Waste analysis failed.",
         error: error.message,
-        data: failedDoc,
+        data: transformedFailedData,
       });
     }
   })
 );
 
-//get authUser waste analysis history
+// Get authUser waste analysis history
 router.get(
   "/",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
-    // Get page & limit from query params
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-
     const skip = (page - 1) * limit;
 
     // Get user-specific records
     const [results, total] = await Promise.all([
       wasteAnalysis
-        .find({ analysedBy: userId })
-        .sort({ createdAt: -1 })
+        .find({ waste_analysedBy: userId })
+        .sort({ waste_createdAt: -1 })
         .skip(skip)
         .limit(limit),
 
-      wasteAnalysis.countDocuments({ analysedBy: userId }),
+      wasteAnalysis.countDocuments({ waste_analysedBy: userId }),
     ]);
+
+    // Transform all results for frontend
+    const transformedResults = results.map(transformWasteAnalysis);
 
     res.status(200).json({
       success: true,
@@ -210,23 +252,23 @@ router.get(
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      data: results,
+      data: transformedResults,
     });
   })
 );
 
+// Get single waste analysis by ID
 router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const userId = req.user._id;
-
     const { id } = req.params;
 
     // Find item by ID and ensure it belongs to this user
     const analysis = await wasteAnalysis.findOne({
       _id: id,
-      analysedBy: userId,
+      waste_analysedBy: userId,
     });
 
     if (!analysis) {
@@ -236,9 +278,12 @@ router.get(
       });
     }
 
+    // Transform before sending to frontend
+    const transformedAnalysis = transformWasteAnalysis(analysis);
+
     return res.status(200).json({
       success: true,
-      data: analysis,
+      data: transformedAnalysis,
     });
   })
 );

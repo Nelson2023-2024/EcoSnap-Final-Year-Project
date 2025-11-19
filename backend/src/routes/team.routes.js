@@ -6,13 +6,14 @@ import { User } from "../models/User.model.js";
 
 const router = Router();
 
-//Create a team
+// Create a team
 router.post(
   "/",
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
     const { name, specialization } = req.body;
+
     // Validate required fields
     if (!name || !specialization)
       return res.status(400).json({
@@ -21,15 +22,15 @@ router.post(
       });
 
     // Prevent duplicate team names
-    const existingTeam = await Team.findOne({ name });
+    const existingTeam = await Team.findOne({ team_name: name });
     if (existingTeam)
       return res.status(400).json({ message: "Team name already exists" });
 
     // Create the team
     const team = await Team.create({
-      name,
-      specialization,
-      status: "active", // By default, teams are active
+      team_name: name,
+      team_specialization: specialization,
+      team_status: "active", // default
     });
 
     res.status(201).json({
@@ -40,13 +41,16 @@ router.post(
   })
 );
 
-//get all teams
+// Get all teams
 router.get(
   "/",
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const teams = await Team.find().populate("members", "fullName email role");
+    const teams = await Team.find().populate(
+      "team_members",
+      "fullName email role"
+    );
 
     if (teams.length === 0)
       return res.json({
@@ -62,21 +66,23 @@ router.get(
   })
 );
 
-//get a specific team
+// Get a specific team
 router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const team = await Team.findById(req.params.id).populate(
-      "members",
+      "team_members",
       "fullName email role"
     );
+
     if (!team) {
       return res.status(404).json({
         success: false,
         message: "Team not found",
       });
     }
+
     res.json({
       success: true,
       data: team,
@@ -84,15 +90,15 @@ router.get(
   })
 );
 
-//update team details
+// Update team details
 router.put(
   "/:id",
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
     const { name, specialization, status } = req.body;
-    const team = await Team.findById(req.params.id);
 
+    const team = await Team.findById(req.params.id);
     if (!team) {
       return res.status(404).json({
         success: false,
@@ -100,10 +106,10 @@ router.put(
       });
     }
 
-    // Update team information
-    if (name) team.name = name;
-    if (specialization) team.specialization = specialization;
-    if (status) team.status = status;
+    // Update fields using prefixed DB keys
+    if (name) team.team_name = name;
+    if (specialization) team.team_specialization = specialization;
+    if (status) team.team_status = status;
 
     await team.save();
 
@@ -115,18 +121,18 @@ router.put(
   })
 );
 
-
-//delete team
+// Delete team
 router.delete(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const team = await Team.findById(req.params.id);
+
     if (!team) {
       return res.status(404).json({ message: "Team not found" });
     }
 
-    // Unassign members
+    // Unassign members (their field is still normal)
     await User.updateMany(
       { assignedTeam: team._id },
       { $unset: { assignedTeam: "" } }
@@ -140,8 +146,5 @@ router.delete(
     });
   })
 );
-
-//Removing a user from a team
-
 
 export { router as teamRoutes };
