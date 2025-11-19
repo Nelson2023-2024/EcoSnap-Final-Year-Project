@@ -1,5 +1,15 @@
-"use client"
-import { LayoutDashboard, FileText, Users, Truck, Store, BarChart3 } from "lucide-react";
+"use client";
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  Truck,
+  Store,
+  Bell,
+  TruckIcon,
+  User2Icon,
+  Spade
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -17,11 +27,13 @@ import {
 
 const menuItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Users", url: "/admin/users", icon: User2Icon },
   { title: "Reports", url: "/admin/reports", icon: FileText },
-  { title: "Users", url: "/admin/users", icon: Users },
-  { title: "Dispatch", url: "/admin/dispatch", icon: Truck },
+  { title: "Teams", url: "/admin/teams", icon: Users },
+  { title: "Trucks", url: "/admin/trucks", icon: TruckIcon },
+  { title: "Dispatch", url: "/admin/dispatch", icon: Spade },
   { title: "Eco Store", url: "/admin/store", icon: Store },
-  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
+  { title: "Notifications", url: "/admin/notifications", icon: Bell },
 ];
 
 export function AdminSidebar() {
@@ -50,7 +62,9 @@ export function AdminSidebar() {
                       <Link
                         href={item.url}
                         className={`hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1 transition ${
-                          isActive ? "bg-primary/10 text-primary font-medium" : ""
+                          isActive
+                            ? "bg-primary/10 text-primary font-medium"
+                            : ""
                         }`}
                       >
                         <item.icon className="h-4 w-4" />
