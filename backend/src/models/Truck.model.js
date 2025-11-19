@@ -7,7 +7,6 @@ const truckSchema = new mongoose.Schema(
     truck_id: {
       type: String,
       default: () => `truck_${uuidv4()}`,
-      unique: true,
     },
 
     truck_registrationNumber: {

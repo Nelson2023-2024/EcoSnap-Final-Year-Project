@@ -6,8 +6,7 @@ const teamSchema = new mongoose.Schema(
     // Auto-generated truck ID
     team_id: {
       type: String,
-      default: () => `truck_${uuidv4()}`,
-      unique: true,
+      default: () => `team_${uuidv4()}`,
     },
     team_name: {
       type: String,

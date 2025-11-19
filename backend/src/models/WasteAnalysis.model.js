@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 const wasteAnalysisSchema = new mongoose.Schema({
   waste_id: {
     type: String,
-    default: () => `truck_${uuidv4()}`,
+    default: () => `waste_${uuidv4()}`,
     unique: true,
   },
   waste_analysedBy: {

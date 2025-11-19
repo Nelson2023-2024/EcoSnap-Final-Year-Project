@@ -2,35 +2,41 @@ import mongoose from "mongoose";
 
 const dispatchSchema = new mongoose.Schema(
   {
-    wasteAnalysisId: {
+    // Auto-generated truck ID
+    dispatch_id: {
+      type: String,
+      default: () => `dispatch_${uuidv4()}`,
+      unique: true,
+    },
+    dispatch_wasteAnalysisId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "WasteAnalysis",
       required: true,
     },
-    reportedBy: {
+    dispatch_reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    assignedTruck: {
+    dispatch_assignedTruck: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Truck",
     },
-    assignedTeam: {
+    dispatch_assignedTeam: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
     },
-    truckType: {
+    dispatch_truckType: {
       type: String,
       enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],
       required: true,
     },
-    status: {
+    dispatch_status: {
       type: String,
       enum: ["pending", "assigned", "in_progress", "completed"],
       default: "pending",
     },
-    location: {
+    dispatch_location: {
       type: {
         type: String,
         enum: ["Point"],
@@ -40,22 +46,22 @@ const dispatchSchema = new mongoose.Schema(
       address: String,
     },
 
-    priority: {
+    dispatch_priority: {
       type: String,
       enum: ["low", "medium", "high", "urgent"],
       default: "medium",
     },
-    scheduledDate: {
+    dispatch_scheduledDate: {
       type: Date,
       required: true,
     },
 
     // Timeline tracking
-    assignedAt: Date,
-    dispatchedAt: Date,
-    completedAt: Date,
+    dispatch_assignedAt: Date,
+    dispatch_dispatchedAt: Date,
+    dispatch_completedAt: Date,
 
-    verificationPhotos: [String],
+    dispatch_verificationPhotos: [String],
     // Issues during collection
     issues: [
       {
@@ -66,8 +72,16 @@ const dispatchSchema = new mongoose.Schema(
         },
       },
     ],
+     dispatch_createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    dispatch_updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  { timestamps: true }
 );
 
 dispatchSchema.index({ location: "2dsphere" });
