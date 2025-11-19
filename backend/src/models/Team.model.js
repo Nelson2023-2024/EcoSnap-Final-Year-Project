@@ -1,39 +1,60 @@
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const teamSchema = new mongoose.Schema(
   {
-    name: {
+    // Auto-generated truck ID
+    team_id: {
+      type: String,
+      default: () => `truck_${uuidv4()}`,
+      unique: true,
+    },
+    team_name: {
       type: String,
       required: true,
+      trim: true,
     },
-    teamURL: {
+
+    team_url: {
       type: String,
     },
-    members: [
+
+    team_members: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
-    specialization: {
+
+    team_specialization: {
       type: String,
       enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],
       default: "general",
     },
-    trucks: [
+
+    team_trucks: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Truck",
       },
     ],
 
-    status: {
+    team_status: {
       type: String,
       enum: ["active", "off_duty"],
       default: "active",
     },
+    team_createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    team_updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  { timestamps: true }
+  { timestamps: false }
 );
 
 export const Team = mongoose.model("Team", teamSchema);
