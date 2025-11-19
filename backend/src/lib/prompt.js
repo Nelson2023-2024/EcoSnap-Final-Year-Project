@@ -112,7 +112,7 @@ The JSON must match this exact structure:
 {
   "containsWaste": true/false,
   "wasteCategories": [
-    {"type": "string", "estimatedPercentage": number}
+    {"waste_type": "string", "waste_estimatedPercentage": number}  // Changed field name
   ],
   "dominantWasteType": "string or null",
   "estimatedVolume": {"value": number, "unit": "kg" | "liters" | "cubic_meters"} or null,
