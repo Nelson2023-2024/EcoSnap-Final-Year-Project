@@ -157,3 +157,34 @@ export function useWasteAnalysis(id: string | undefined) {
     staleTime: 1000 * 60 * 2, // Cache for 2 minutes
   });
 }
+
+
+// -------------------- Infinite Query: Admin Waste Reports --------------------
+export function useAdminWasteReportsInfinite(limit = 10) {
+  return useInfiniteQuery<PaginatedResponse, Error>({
+    queryKey: ["adminWasteReports", "all"],
+    queryFn: async ({ pageParam = 1 }) => {
+      const res = await fetch(
+        `${API_URL}/waste-analysis/admin/all?page=${pageParam}&limit=${limit}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to fetch admin waste reports");
+
+      const json = await res.json();
+      return json;
+    },
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage) => {
+      return lastPage.page < lastPage.totalPages
+        ? lastPage.page + 1
+        : undefined;
+    },
+
+    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+  });
+}
