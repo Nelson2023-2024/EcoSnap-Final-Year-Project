@@ -47,10 +47,9 @@ router.get(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const teams = await Team.find().populate(
-      "team_members",
-      "fullName email role"
-    );
+    const teams = await Team.find()
+      .populate("team_members", "fullName email role")
+      .populate("team_trucks", " truck_registrationNumber");
 
     if (teams.length === 0)
       return res.json({
