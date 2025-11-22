@@ -1,98 +1,169 @@
-// frontend/src/hooks/useProduct.ts
 import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
-import { useEffect } from "react";
 
-// ------------------- Types -------------------
-export interface Product {
-  product_id: string;
-  product_name: string;
-  product_description?: string;
-  product_imageURL: string;
-  product_pointsCost: number;
-  product_stock: number;
-  product_isAvailable: boolean;
-  product_createdAt: string;
-  product_updatedAt: string;
-}
-
-interface CreateProductParams {
-  productName: string;
-  productDescription: string;
-  productPointsCost: number;
-  productStock: number;
-  productImage: File;
-}
-
-// ------------------- Fetch all products -------------------
+// Get all products
 export function useProducts() {
-  const query = useQuery<Product[], Error>({
+  return useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/product`, {
+      const response = await fetch(`${API_URL}/product`, {
         credentials: "include",
       });
 
-      if (!res.ok) throw new Error("Failed to fetch products");
+      if (!response.ok) {
+        throw new Error("Failed to fetch products");
+      }
 
-      const data = await res.json();
-
-      // API might return { message: string } when empty
-      return Array.isArray(data) ? data : [];
+      const data = await response.json();
+      return data.data || [];
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
   });
-
-  // Handle errors with useEffect instead
-  useEffect(() => {
-    if (query.error) {
-      toast.error(query.error.message || "Failed to load products");
-    }
-  }, [query.error]);
-
-  return query;
 }
 
-// ------------------- Create new product -------------------
+// Get single product
+export function useProduct(id: string) {
+  return useQuery({
+    queryKey: ["product", id],
+    queryFn: async () => {
+      const response = await fetch(`${API_URL}/product/${id}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch product");
+      }
+
+      const data = await response.json();
+      return data.data;
+    },
+    enabled: !!id,
+  });
+}
+
+// Create product
 export function useCreateProduct() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      productName,
-      productDescription,
-      productPointsCost,
-      productStock,
-      productImage,
-    }: CreateProductParams) => {
+    mutationFn: async (productData: {
+      productName: string;
+      productDescription: string;
+      productPointsCost: number;
+      productStock: number;
+      productImage: File;
+    }) => {
       const formData = new FormData();
-      formData.append("productName", productName);
-      formData.append("productDescription", productDescription);
-      formData.append("productPointsCost", productPointsCost.toString());
-      formData.append("productStock", productStock.toString());
-      formData.append("productImage", productImage);
+      formData.append("productName", productData.productName);
+      formData.append("productDescription", productData.productDescription);
+      formData.append("productPointsCost", productData.productPointsCost.toString());
+      formData.append("productStock", productData.productStock.toString());
+      formData.append("productImage", productData.productImage);
 
-      const res = await fetch(`${API_URL}/product`, {
+      const response = await fetch(`${API_URL}/product`, {
         method: "POST",
         credentials: "include",
         body: formData,
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to create product");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create product");
       }
 
-      const json = await res.json();
-      return json.data as Product;
+      const data = await response.json();
+      return data.data;
     },
-    onSuccess: (data) => {
-      toast.success("Product created successfully!");
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Product created successfully!");
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create product");
+    },
+  });
+}
+
+// Update product
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      productName,
+      productDescription,
+      productPointsCost,
+      productStock,
+      productIsAvailable,
+      productImage,
+    }: {
+      id: string;
+      productName?: string;
+      productDescription?: string;
+      productPointsCost?: number;
+      productStock?: number;
+      productIsAvailable?: boolean;
+      productImage?: File;
+    }) => {
+      const formData = new FormData();
+      if (productName) formData.append("productName", productName);
+      if (productDescription) formData.append("productDescription", productDescription);
+      if (productPointsCost !== undefined) formData.append("productPointsCost", productPointsCost.toString());
+      if (productStock !== undefined) formData.append("productStock", productStock.toString());
+      if (productIsAvailable !== undefined) formData.append("productIsAvailable", productIsAvailable.toString());
+      if (productImage) formData.append("productImage", productImage);
+
+      const response = await fetch(`${API_URL}/product/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update product");
+      }
+
+      const data = await response.json();
+      return data.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product", data._id] });
+      toast.success("Product updated successfully!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update product");
+    },
+  });
+}
+
+// Delete product
+export function useDeleteProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`${API_URL}/product/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to delete product");
+      }
+
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Product deleted successfully!");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete product");
     },
   });
 }
