@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import upload from "../middleware/upload.middleware.js";
-import { isAuthenticated } from "../middleware/auth.middleware.js";
+import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
 import { wasteAnalysis } from "../models/wasteAnalysis.model.js";
 import { User } from "../models/user.model.js";
 import { Reward } from "../models/Reward.model.js";
@@ -14,35 +14,40 @@ const router = Router();
 // Helper function to transform DB document to frontend format
 const transformWasteAnalysis = (doc) => {
   if (!doc) return null;
-  
+
   const obj = doc.toObject ? doc.toObject() : doc;
-  
+
   return {
     _id: obj._id,
     analysedBy: obj.waste_analysedBy,
     imageURL: obj.waste_imageURL,
     containsWaste: obj.waste_containsWaste,
-    wasteCategories: obj.waste_wasteCategories?.map(cat => ({
-      type: cat.waste_type,
-      estimatedPercentage: cat.waste_estimatedPercentage
-    })) || [],
+    wasteCategories:
+      obj.waste_wasteCategories?.map((cat) => ({
+        type: cat.waste_type,
+        estimatedPercentage: cat.waste_estimatedPercentage,
+      })) || [],
     dominantWasteType: obj.waste_dominantWasteType,
-    estimatedVolume: obj.waste_estimatedVolume ? {
-      value: obj.waste_estimatedVolume.waste_value,
-      unit: obj.waste_estimatedVolume.waste_unit
-    } : null,
+    estimatedVolume: obj.waste_estimatedVolume
+      ? {
+          value: obj.waste_estimatedVolume.waste_value,
+          unit: obj.waste_estimatedVolume.waste_unit,
+        }
+      : null,
     possibleSource: obj.waste_possibleSource,
     environmentalImpact: obj.waste_environmentalImpact,
     confidenceLevel: obj.waste_confidenceLevel,
     status: obj.waste_status,
     errorMessage: obj.waste_errorMessage,
-    location: obj.waste_location ? {
-      type: obj.waste_location.waste_type,
-      coordinates: obj.waste_location.waste_coordinates,
-      address: obj.waste_location.waste_address
-    } : null,
+    location: obj.waste_location
+      ? {
+          type: obj.waste_location.waste_type,
+          coordinates: obj.waste_location.waste_coordinates,
+          address: obj.waste_location.waste_address,
+        }
+      : null,
     createdAt: obj.waste_createdAt || obj.createdAt,
-    updatedAt: obj.waste_updatedAt || obj.updatedAt
+    updatedAt: obj.waste_updatedAt || obj.updatedAt,
   };
 };
 
@@ -257,6 +262,7 @@ router.get(
   })
 );
 
+
 // Get single waste analysis by ID
 router.get(
   "/:id",
@@ -284,6 +290,42 @@ router.get(
     return res.status(200).json({
       success: true,
       data: transformedAnalysis,
+    });
+  })
+);
+
+
+// ==========================
+// GET ALL WASTE REPORTS (ADMIN)
+// ==========================
+router.get(
+  "/admin/all",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 1;
+    const skip = (page - 1) * limit;
+
+    const [results, total] = await Promise.all([
+      wasteAnalysis
+        .find({})
+        .sort({ waste_createdAt: -1 }) // newest first
+        .skip(skip)
+        .limit(limit),
+
+      wasteAnalysis.countDocuments(),
+    ]);
+
+    const transformed = results.map(transformWasteAnalysis);
+
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: transformed,
     });
   })
 );
