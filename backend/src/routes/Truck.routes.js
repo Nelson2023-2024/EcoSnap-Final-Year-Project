@@ -2,10 +2,11 @@ import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
 import { Team } from "../models/Team.model.js";
-import { User } from "../models/User.model.js";
 import { Truck } from "../models/Truck.model.js";
 import { Notification } from "../models/Notification.model.js";
 import mongoose from "mongoose";
+import upload from "../middleware/upload.middleware.js";
+import { uploadToCloudinary } from "../lib/upload.cloudinary.js";
 
 const router = Router();
 
@@ -14,15 +15,36 @@ router.post(
   "/",
   isAuthenticated,
   isAdmin,
+  upload.single("image"), // ⬅️ IMPORTANT: Accept file field "image"
   asyncHandler(async (req, res) => {
-    const { registrationNumber, truckType, capacity, assignedTeam, imageURL } =
-      req.body;
+    const { registrationNumber, truckType, capacity, assignedTeam } = req.body;
 
     if (!registrationNumber || !truckType || !capacity)
       return res.status(400).json({
         success: false,
         message: "Registration number, truck type, and capacity are required",
       });
+
+    // Ensure image exists
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Truck image is required",
+      });
+    }
+
+    // Upload the image to Cloudinary
+    let truck_imageURL;
+    try {
+      truck_imageURL = await uploadToCloudinary(req.file, "trucks");
+    } catch (err) {
+      console.error("Cloudinary Upload Error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload image",
+        error: err.message,
+      });
+    }
 
     // Check duplicate
     const existingTruck = await Truck.findOne({
@@ -47,13 +69,13 @@ router.post(
       }
     }
 
-    // Create truck
+    // Create truck in DB
     const truck = await Truck.create({
       truck_registrationNumber: registrationNumber,
       truck_truckType: truckType,
       truck_capacity: capacity,
-      truck_assignedTeam: assignedTeam,
-      truck_imageURL: imageURL,
+      truck_assignedTeam: assignedTeam || null,
+      truck_imageURL,
     });
 
     // Assign truck to team
@@ -163,8 +185,7 @@ router.put(
     }
 
     // Apply updates
-    if (registrationNumber)
-      truck.truck_registrationNumber = registrationNumber;
+    if (registrationNumber) truck.truck_registrationNumber = registrationNumber;
     if (truckType) truck.truck_truckType = truckType;
     if (capacity) truck.truck_capacity = capacity;
     if (status) truck.truck_status = status;
