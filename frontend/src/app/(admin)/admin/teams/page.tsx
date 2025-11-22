@@ -4,7 +4,7 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Plus, User, Trash2 } from "lucide-react";
+import { Users, Plus, User, Trash2, LoaderIcon } from "lucide-react";
 import { useCreateTeam, useTeams, useDeleteTeam, useUpdateTeam } from "@/hooks/useTeams";
 import { toast } from "react-hot-toast";
 
@@ -126,7 +126,16 @@ export default function Teams() {
     }
   };
 
-  if (isLoading) return <p className="text-center py-10">Loading teams...</p>;
+ if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <LoaderIcon className="h-8 w-8 animate-spin text-eco-primary" />
+          <p className="text-muted-foreground">Loading teams...</p>
+        </div>
+      </div>
+    );
+  }
   if (error)
     return (
       <p className="text-center text-red-500 py-10">Failed to load teams</p>
