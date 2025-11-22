@@ -4,14 +4,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Calendar, Eye, Search, Filter, LoaderIcon } from "lucide-react";
+import {
+  MapPin,
+  Calendar,
+  Eye,
+  Search,
+  Filter,
+  LoaderIcon,
+} from "lucide-react";
 import { useWasteAnalysisHistoryInfinite } from "@/hooks/useWasteAnalysis";
 import { useEffect, useRef } from "react";
 
 const ReportHistory = () => {
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError } = 
-    useWasteAnalysisHistoryInfinite(10);
-  
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+  } = useWasteAnalysisHistoryInfinite(10);
+
   const observerTarget = useRef<HTMLDivElement>(null);
 
   // Infinite scroll intersection observer
@@ -38,11 +51,13 @@ const ReportHistory = () => {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   // Flatten all pages into single reports array
-  const reports = data?.pages.flatMap(page => page.data) ?? [];
+  const reports = data?.pages.flatMap((page) => page.data) ?? [];
   const totalReports = data?.pages[0]?.total ?? 0;
-  const completedReports = reports.filter(r => r.status === "collected").length;
-  const pendingReports = reports.filter(r => 
-    r.status === "pending_dispatch" || r.status === "dispatched"
+  const completedReports = reports.filter(
+    (r) => r.status === "collected"
+  ).length;
+  const pendingReports = reports.filter(
+    (r) => r.status === "pending_dispatch" || r.status === "dispatched"
   ).length;
 
   const getStatusColor = (status: string) => {
@@ -68,16 +83,16 @@ const ReportHistory = () => {
       dispatched: "In Progress",
       pending_dispatch: "Pending",
       no_waste: "No Waste",
-      error: "Error"
+      error: "Error",
     };
     return statusMap[status] || status;
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -97,7 +112,9 @@ const ReportHistory = () => {
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <Card className="max-w-md mx-4">
           <CardContent className="pt-6">
-            <p className="text-center text-red-600">Failed to load reports. Please try again.</p>
+            <p className="text-center text-red-600">
+              Failed to load reports. Please try again.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -122,12 +139,12 @@ const ReportHistory = () => {
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input 
-                placeholder="Search reports..." 
-                className="pl-9 focus:border-eco-primary focus:ring-eco-primary" 
+              <Input
+                placeholder="Search reports..."
+                className="pl-9 focus:border-eco-primary focus:ring-eco-primary"
               />
             </div>
-            <Button 
+            <Button
               variant="outline"
               className="border-eco-primary text-eco-primary hover:bg-eco-primary hover:text-white"
             >
@@ -140,26 +157,38 @@ const ReportHistory = () => {
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="border-border transition-all hover:shadow-md">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Reports</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Reports
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">{totalReports}</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {totalReports}
+                </div>
               </CardContent>
             </Card>
             <Card className="border-border transition-all hover:shadow-md">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Completed
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-eco-primary">{completedReports}</div>
+                <div className="text-2xl font-bold text-eco-primary">
+                  {completedReports}
+                </div>
               </CardContent>
             </Card>
             <Card className="border-border transition-all hover:shadow-md">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Pending
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-warning">{pendingReports}</div>
+                <div className="text-2xl font-bold text-warning">
+                  {pendingReports}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -168,13 +197,18 @@ const ReportHistory = () => {
           {reports.length === 0 ? (
             <Card className="border-border">
               <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">No reports found. Start by submitting your first waste report!</p>
+                <p className="text-muted-foreground">
+                  No reports found. Start by submitting your first waste report!
+                </p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
               {reports.map((report) => (
-                <Card key={report._id} className="border-border transition-all hover:shadow-lg">
+                <Card
+                  key={report._id}
+                  className="border-border transition-all hover:shadow-lg"
+                >
                   <CardContent className="p-6">
                     <div className="flex flex-col gap-4 md:flex-row">
                       {/* Image */}
@@ -211,33 +245,39 @@ const ReportHistory = () => {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            {report.wasteCategories.map((category) => (
-                              <Badge 
-                                key={category.type} 
-                                variant="outline" 
+                            {report.wasteCategories.map((category, index) => (
+                              <Badge
+                                key={`${category.type ?? "unknown"}-${
+                                  category.estimatedPercentage ?? "0"
+                                }-${index}`}
+                                variant="outline"
                                 className="text-xs border-eco-primary/30 text-eco-primary"
                               >
-                                {category.type} ({category.estimatedPercentage}%)
+                                {category.type || "Unknown"} (
+                                {category.estimatedPercentage ?? 0}%)
                               </Badge>
                             ))}
                           </div>
 
                           {report.estimatedVolume && (
                             <div className="text-sm text-muted-foreground">
-                              Est. Volume: {report.estimatedVolume.value} {report.estimatedVolume.unit}
+                              Est. Volume: {report.estimatedVolume.value}{" "}
+                              {report.estimatedVolume.unit}
                             </div>
                           )}
                         </div>
 
                         <div className="mt-3 flex items-center justify-between">
                           <div className="text-sm">
-                            <span className="text-muted-foreground">Confidence: </span>
+                            <span className="text-muted-foreground">
+                              Confidence:{" "}
+                            </span>
                             <span className="font-semibold text-eco-primary capitalize">
                               {report.confidenceLevel}
                             </span>
                           </div>
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             className="border-eco-primary text-eco-primary hover:bg-eco-primary hover:text-white"
                           >
@@ -260,7 +300,9 @@ const ReportHistory = () => {
                   </div>
                 )}
                 {!hasNextPage && reports.length > 0 && (
-                  <p className="text-muted-foreground">No more reports to load</p>
+                  <p className="text-muted-foreground">
+                    No more reports to load
+                  </p>
                 )}
               </div>
             </div>
