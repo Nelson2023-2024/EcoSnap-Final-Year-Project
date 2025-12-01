@@ -41,6 +41,7 @@ export function useRedeemProduct() {
       // Invalidate queries to refresh user points and products
       queryClient.invalidateQueries({ queryKey: ["authUser"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["user-dashboard"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to redeem product");
