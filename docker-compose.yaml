@@ -1,8 +1,8 @@
 services:
-  nginx:
-    image: nginx:stable-alpine
-    volumes:
-      - ./backend/src/nginx/default.conf:/etc/nginx/conf.d/default.conf
+  # nginx:
+  #   image: nginx:stable-alpine
+  #   volumes:
+  #     - ./backend/src/nginx/default.conf:/etc/nginx/conf.d/default.conf
 
   ecosnap-backend:
     image: nelson254/ecosnap-backend
