@@ -11,9 +11,15 @@ export const prisma = new PrismaClient({ adapter, log:["query","error","info","w
 // Test database connection
 export async function testConnection() {
   try {
+    console.log(await prisma.$connect())
     await prisma.$connect();
-    console.log("✅ Database connection established successfully!");
+    if (await prisma.$connect()){
+      console.log("Connected Successfully")
+    }
+    else{
+      console.error("Failed to connect to the database:");  
+    }
   } catch (error) {
-    console.error("❌ Failed to connect to the database:", error);
+    console.error("Failed to connect to the database:", error);
   }
 }
