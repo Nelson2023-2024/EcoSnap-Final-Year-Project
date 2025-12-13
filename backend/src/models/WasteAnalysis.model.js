@@ -12,18 +12,15 @@ const wasteAnalysisSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-
   waste_imageURL: {
     type: String,
     required: true,
     trim: true,
   },
-
   waste_containsWaste: {
     type: Boolean,
     default: true,
   },
-
   waste_wasteCategories: [
     {
       waste_type: {
@@ -37,12 +34,7 @@ const wasteAnalysisSchema = new mongoose.Schema({
       },
     },
   ],
-
-  // Overall analysis
-  waste_dominantWasteType: {
-    type: String,
-  },
-
+  waste_dominantWasteType: String,
   waste_estimatedVolume: {
     waste_value: Number,
     waste_unit: {
@@ -51,34 +43,18 @@ const wasteAnalysisSchema = new mongoose.Schema({
       default: "kg",
     },
   },
-
-  waste_possibleSource: {
-    type: String,
-    trim: true,
-  },
-
-  waste_environmentalImpact: {
-    type: String,
-    trim: true,
-  },
-
-  waste_confidenceLevel: {
-    type: String,
-    trim: true,
-  },
-
+  waste_possibleSource: String,
+  waste_environmentalImpact: String,
+  waste_confidenceLevel: String,
   waste_status: {
     type: String,
     enum: ["pending_dispatch", "dispatched", "collected", "no_waste", "error"],
     default: "pending_dispatch",
   },
-
   waste_errorMessage: {
     type: String,
-    trim: true,
     default: null,
   },
-
   waste_location: {
     waste_type: {
       type: String,
@@ -89,23 +65,19 @@ const wasteAnalysisSchema = new mongoose.Schema({
       type: [Number], // [longitude, latitude]
       required: true,
     },
-    waste_address: {
-      type: String,
-      trim: true,
-    },
+    waste_address: String,
   },
   waste_createdAt: {
     type: Date,
     default: Date.now,
   },
-
   waste_updatedAt: {
     type: Date,
     default: Date.now,
   },
 });
 
-export const wasteAnalysis = mongoose.model(
-  "WasteAnalysis",
-  wasteAnalysisSchema
-);
+// 🚑 FIX: prevent OverwriteModelError
+export const wasteAnalysis =
+  mongoose.models.WasteAnalysis ||
+  mongoose.model("WasteAnalysis", wasteAnalysisSchema);

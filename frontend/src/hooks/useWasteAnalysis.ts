@@ -1,5 +1,10 @@
 import { API_URL } from "@/lib/api-url";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
 // Types
@@ -22,7 +27,12 @@ interface WasteAnalysisItem {
   possibleSource: string;
   environmentalImpact: string;
   confidenceLevel: string;
-  status: "pending_dispatch" | "dispatched" | "collected" | "no_waste" | "error";
+  status:
+    | "pending_dispatch"
+    | "dispatched"
+    | "collected"
+    | "no_waste"
+    | "error";
   errorMessage: string | null;
   location: {
     type: "Point";
@@ -71,7 +81,12 @@ export function useAnalyzeWaste() {
     data,
     error,
   } = useMutation({
-    mutationFn: async ({ image, latitude, longitude, address }: AnalyzeWasteParams) => {
+    mutationFn: async ({
+      image,
+      latitude,
+      longitude,
+      address,
+    }: AnalyzeWasteParams) => {
       const formData = new FormData();
       formData.append("image", image);
       formData.append("latitude", latitude.toString());
@@ -94,19 +109,24 @@ export function useAnalyzeWaste() {
     },
     onSuccess: (data) => {
       // Method 1: Invalidate with refetchType to ensure active queries refetch
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ["wasteAnalysis", "history"],
-        refetchType: 'active' // This ensures active queries are refetched immediately
+        refetchType: "active", // This ensures active queries are refetched immediately
       });
-      
-      queryClient.invalidateQueries({ queryKey: ["authUser"] });
 
-      toast.success(`${data.message} You earned ${data.pointsAwarded} points!`, {
-        duration: 5000,
-      });
+      queryClient.invalidateQueries({ queryKey: ["authUser"] });
+      queryClient.invalidateQueries({ queryKey: ["user-dashboard"] });
+      toast.success(
+        `${data.message} You earned ${data.pointsAwarded} points!`,
+        {
+          duration: 5000,
+        }
+      );
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to analyze waste. Please try again.");
+      toast.error(
+        error.message || "Failed to analyze waste. Please try again."
+      );
     },
   });
 
@@ -118,9 +138,12 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
   return useInfiniteQuery<PaginatedResponse, Error>({
     queryKey: ["wasteAnalysis", "history"],
     queryFn: async ({ pageParam = 1 }) => {
-      const res = await fetch(`${API_URL}/waste-analysis?page=${pageParam}&limit=${limit}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${API_URL}/waste-analysis?page=${pageParam}&limit=${limit}`,
+        {
+          credentials: "include",
+        }
+      );
 
       if (!res.ok) throw new Error("Failed to fetch waste analysis history");
       const json = await res.json();
@@ -128,12 +151,13 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      return lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined;
+      return lastPage.page < lastPage.totalPages
+        ? lastPage.page + 1
+        : undefined;
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
-
 
 export function useWasteAnalysis(id: string | undefined) {
   return useQuery<WasteAnalysisItem, Error>({
@@ -157,7 +181,6 @@ export function useWasteAnalysis(id: string | undefined) {
     staleTime: 1000 * 60 * 2, // Cache for 2 minutes
   });
 }
-
 
 // -------------------- Infinite Query: Admin Waste Reports --------------------
 export function useAdminWasteReportsInfinite(limit = 10) {

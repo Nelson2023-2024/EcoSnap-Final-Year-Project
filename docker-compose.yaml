@@ -9,13 +9,21 @@ services:
     build:
       context: ./backend/
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app:ro # syncs code on local machine with container code
-      - /app/node_modules #Prevents the bind mount from modifying the node_modules in the container
     env_file:
       - ./backend/.env
-    depends_on:
-      - mongo-database
+    # depends_on:
+      # - postgres
+    
+  # ecosnap-frontend:
+  #   image: nelson254/ecosnap-frontend
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - 3000:3000
+  #   depends_on:
+  #     - ecosnap-backend
+
 
   mongo-database:
     image: mongo
@@ -34,6 +42,19 @@ services:
     volumes:
       - ecosnap-redis-volume:/data
 
+  # postgres:
+  #   image: postgres:18
+  #   restart: always
+  #   environment:
+  #     - POSTGRES_PASSWORD=root
+  #     - POSTGRES_USER=nelson
+  #     - POSTGRES_DB=ecosnap
+  #   ports:
+  #     - 5432:5432
+  #   volumes:
+  #     - ecosnap-postgres-volume:/var/lib/postgresql/18/docker
+
 volumes:
   ecosnap-mongo-volume:
   ecosnap-redis-volume:
+  # ecosnap-postgres-volume:

@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  user_id            String       @id @default(uuid())
+  user_firstName     String?
+  user_lastName      String?
+  user_fullName      String?
+  user_email         String       @unique
+  user_username      String       @unique
+  user_phoneNumber   String?
+  user_password      String?
+  user_profileImage  String?      @default("https://cdn-icons-png.flaticon.com/512/149/149071.png")
+  user_points        Int          @default(0)
+  user_googleID      String?      @unique
+  user_authProvider  String?
+  user_role          UserRole     @default(user)
+  user_createdAt     DateTime     @default(now())
+  user_updatedAt     DateTime     @updatedAt
+  user_assignedTeams TeamMember[]
+
+  @@map("users")
+}
+
+model Team {
+  team_id             String             @id @default(uuid())
+  team_name           String
+  team_url            String?
+  team_specialization TeamSpecialization @default(general)
+  team_status         TeamStatus         @default(active)
+  team_createdAt      DateTime           @default(now())
+  team_updatedAt      DateTime           @updatedAt
+  team_members        TeamMember[]
+  team_trucks         Truck[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String @id @default(uuid())
+  userId String
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [team_id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model Truck {
+  truck_id                 String      @id @default(uuid())
+  truck_registrationNumber String      @unique
+  truck_imageURL           String?
+  truck_truckType          TruckType
+  truck_capacity           Float
+  truck_status             TruckStatus @default(available)
+  truck_assignedTeamId     String?
+  truck_locationLongitude  Float       @default(0)
+  truck_locationLatitude   Float       @default(0)
+  truck_createdAt          DateTime    @default(now())
+  truck_updatedAt          DateTime    @updatedAt
+  truck_assignedTeam       Team?       @relation(fields: [truck_assignedTeamId], references: [team_id])
+
+  @@map("trucks")
+}
+
+enum UserRole {
+  user
+  admin
+  collector
+}
+
+enum TeamSpecialization {
+  general
+  recyclables
+  e_waste
+  organic
+  hazardous
+
+  @@map("team_specialization")
+}
+
+enum TeamStatus {
+  active
+  off_duty
+
+  @@map("team_status")
+}
+
+enum TruckType {
+  general
+  recyclables
+  e_waste
+  organic
+  hazardous
+
+  @@map("truck_type")
+}
+
+enum TruckStatus {
+  available
+  in_use
+  maintenance
+
+  @@map("truck_status")
+}

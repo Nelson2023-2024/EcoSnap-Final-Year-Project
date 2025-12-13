@@ -68,9 +68,11 @@ const Rewards = () => {
               .map((item) => {
                 const canAfford = user && user.points >= item.product_pointsCost;
                 const outOfStock = item.product_stock === 0;
+                // Use _id as the primary key, fallback to product_id if _id doesn't exist
+                const uniqueKey = item._id || item.product_id;
 
                 return (
-                  <Card key={item.product_id} className="p-4 hover:shadow-lg transition-shadow">
+                  <Card key={uniqueKey} className="p-4 hover:shadow-lg transition-shadow">
                     <div className="h-48 w-full mb-3 rounded-lg overflow-hidden border-2 border-eco-primary/20">
                       <img
                         src={item.product_imageURL}
@@ -101,7 +103,7 @@ const Rewards = () => {
                     <Button
                       className="w-full bg-eco-primary hover:bg-eco-primary/90 cursor-pointer"
                       disabled={!canAfford || outOfStock || isRedeeming}
-                      onClick={() => handleRedeem(item.product_id, item.product_name)}
+                      onClick={() => handleRedeem(item._id || item.product_id, item.product_name)}
                     >
                       {isRedeeming ? (
                         <>

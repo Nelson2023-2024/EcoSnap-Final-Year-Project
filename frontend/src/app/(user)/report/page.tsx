@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Camera, MapPin, Upload, LoaderIcon } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useAnalyzeWaste } from "@/hooks/useWasteAnalysis";
+import { useAnalyzeWaste, useWasteAnalysisHistoryInfinite } from "@/hooks/useWasteAnalysis";
 
 const ReportWaste = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -16,6 +16,37 @@ const ReportWaste = () => {
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const { analyzeWaste, isAnalyzing, data: analysisData } = useAnalyzeWaste();
+  
+  // Add infinite scroll hook
+  const {
+    data: historyData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingHistory,
+  } = useWasteAnalysisHistoryInfinite(10);
+
+  // Intersection observer for infinite scroll
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (observerRef.current) observerRef.current.disconnect();
+
+    observerRef.current = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    });
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,7 +71,6 @@ const ReportWaste = () => {
             lng: position.coords.longitude,
           });
           
-          // Get human-readable address from coordinates
           fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}`)
             .then(res => res.json())
             .then(data => {
@@ -88,11 +118,9 @@ const ReportWaste = () => {
       return;
     }
 
-    // Use GPS coordinates if available, otherwise try to extract from location string
-    let lat = gpsLocation?.lat || -1.2921; // Default fallback
-    let lng = gpsLocation?.lng || 36.8219; // Default fallback
+    let lat = gpsLocation?.lat || -1.2921;
+    let lng = gpsLocation?.lng || 36.8219;
 
-    // Try to extract coordinates from location string if it looks like coordinates
     if (!gpsLocation && location.includes(",")) {
       const coords = location.split(",").map(s => parseFloat(s.trim()));
       if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
@@ -101,15 +129,29 @@ const ReportWaste = () => {
       }
     }
 
-    analyzeWaste({
-      image: imageFile,
-      latitude: lat,
-      longitude: lng,
-      address: location,
-    });
+    analyzeWaste(
+      {
+        image: imageFile,
+        latitude: lat,
+        longitude: lng,
+        address: location,
+      },
+      {
+        onSuccess: () => {
+          // Reset form after successful submission
+          setImageFile(null);
+          setImagePreview(null);
+          setLocation("");
+          setGpsLocation(null);
+        },
+      }
+    );
   };
 
   const analysis = analysisData?.data;
+  
+  // Flatten all pages of history data
+  const allReports = historyData?.pages.flatMap((page) => page.data) || [];
 
   return (
     <div className="min-h-screen bg-background pt-16">
@@ -212,9 +254,11 @@ const ReportWaste = () => {
             </div>
           </Card>
 
-          {/* Analysis Results */}
+          {/* Analysis Results - Latest or Current */}
           <Card className="p-6 border-border transition-all hover:shadow-md">
-            <h2 className="text-2xl font-bold mb-6 text-foreground">AI Analysis</h2>
+            <h2 className="text-2xl font-bold mb-6 text-foreground">
+              {analysis ? "Latest Analysis" : "AI Analysis"}
+            </h2>
             
             {!analysis && !isAnalyzing && (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
@@ -302,6 +346,8 @@ const ReportWaste = () => {
             )}
           </Card>
         </div>
+
+  
       </div>
     </div>
   );

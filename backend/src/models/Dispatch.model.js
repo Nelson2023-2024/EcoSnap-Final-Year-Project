@@ -1,78 +1,108 @@
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const dispatchSchema = new mongoose.Schema(
   {
-    // Auto-generated truck ID
     dispatch_id: {
       type: String,
       default: () => `dispatch_${uuidv4()}`,
       unique: true,
     },
-    dispatch_wasteAnalysisId: {
+
+    // Reference to the waste analysis
+    dispatch_wasteAnalysis: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "WasteAnalysis",
       required: true,
     },
-    dispatch_reportedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    dispatch_assignedTruck: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Truck",
-    },
+
+    // Assigned team and truck
     dispatch_assignedTeam: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
-    },
-    dispatch_truckType: {
-      type: String,
-      enum: ["general", "recyclables", "e-waste", "organic", "hazardous"],
       required: true,
     },
-    dispatch_status: {
-      type: String,
-      enum: ["pending", "assigned", "in_progress", "completed"],
-      default: "pending",
+
+    dispatch_assignedTruck: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Truck",
+      required: true,
     },
-    dispatch_location: {
+
+    // Pickup details
+    dispatch_pickupLocation: {
       type: {
         type: String,
         enum: ["Point"],
         default: "Point",
       },
-      coordinates: { type: [Number], required: true },
-      address: String,
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: true,
+      },
+      address: {
+        type: String,
+        trim: true,
+      },
     },
 
-    dispatch_priority: {
+    dispatch_status: {
       type: String,
-      enum: ["low", "medium", "high", "urgent"],
-      default: "medium",
+      enum: [
+        "pending",
+        "assigned",
+        "en_route",
+        "collected",
+        "completed",
+        "cancelled",
+      ],
+      default: "assigned",
     },
+
+    // Scheduling
     dispatch_scheduledDate: {
       type: Date,
       required: true,
     },
 
-    // Timeline tracking
-    dispatch_assignedAt: Date,
-    dispatch_dispatchedAt: Date,
-    dispatch_completedAt: Date,
+    dispatch_estimatedArrival: {
+      type: Date,
+    },
 
-    dispatch_verificationPhotos: [String],
-    // Issues during collection
-    issues: [
+    dispatch_actualCollectionDate: {
+      type: Date,
+    },
+
+    // Collection verification
+    dispatch_collectionVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    dispatch_collectionNotes: {
+      type: String,
+      trim: true,
+    },
+
+    dispatch_collectionImages: [
       {
-        description: String,
-        reportedAt: {
-          type: Date,
-          default: Date.now,
-        },
+        type: String, // URLs to before/after images
       },
     ],
-     dispatch_createdAt: {
+
+    // Points awarded
+    dispatch_pointsAwarded: {
+      type: Number,
+      default: 0,
+    },
+
+    dispatch_priority: {
+      type: String,
+      enum: ["low", "normal", "high", "urgent"],
+      default: "normal",
+    },
+
+    dispatch_createdAt: {
       type: Date,
       default: Date.now,
     },
@@ -82,8 +112,17 @@ const dispatchSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
+  { timestamps: false }
 );
 
-dispatchSchema.index({ location: "2dsphere" });
+// Update timestamp on save
+dispatchSchema.pre("save", function (next) {
+  this.dispatch_updatedAt = new Date();
+  next();
+});
+
+// Index for geospatial queries
+dispatchSchema.index({ "dispatch_pickupLocation": "2dsphere" });
+dispatchSchema.index({ dispatch_status: 1, dispatch_scheduledDate: 1 });
 
 export const Dispatch = mongoose.model("Dispatch", dispatchSchema);

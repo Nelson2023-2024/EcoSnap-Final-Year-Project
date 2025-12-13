@@ -1,13 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+
+  images: {
+    domains: ["via.placeholder.com", "res.cloudinary.com"], // Add more if needed
+  },
+
   async rewrites() {
     return [
       {
-        source: "/api/:path", // anything starting with /api
-        destination: "http://localhost:8080/api/:path*", //your backend
+        source: "/api/:path",
+        destination: "http://localhost:8080/api/:path*", 
       },
     ];
   },

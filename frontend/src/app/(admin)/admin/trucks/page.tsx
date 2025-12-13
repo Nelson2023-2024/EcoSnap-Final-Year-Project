@@ -43,6 +43,9 @@ export default function Trucks() {
   const deleteTruckMutation = useDeleteTruck();
   const updateTruckMutation = useUpdateTruck();
 
+  // File input ref
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [registrationNumber, setRegistrationNumber] = React.useState("");
@@ -84,6 +87,13 @@ export default function Trucks() {
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreview("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
   };
 
   const handleCreateTruck = async (e: React.FormEvent) => {
@@ -109,6 +119,9 @@ export default function Trucks() {
       setAssignedTeam("");
       setImageFile(null);
       setImagePreview("");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (err) {
       // Error is already handled in the hook
     }
@@ -207,6 +220,126 @@ export default function Trucks() {
     return <p className="text-center text-red-500 py-10">Failed to load trucks</p>;
   }
 
+  const CreateTruckForm = () => (
+    <form className="grid gap-4" onSubmit={handleCreateTruck}>
+      <div className="grid gap-3">
+        <Label>Truck Image *</Label>
+        <div className="flex flex-col gap-3">
+          {imagePreview ? (
+            <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+              <Image
+                src={imagePreview}
+                alt="Truck preview"
+                fill
+                className="object-cover"
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="absolute top-2 right-2"
+                onClick={handleRemoveImage}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div 
+              className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+              onClick={triggerFileInput}
+            >
+              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Click to upload truck image
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                PNG, JPG up to 5MB
+              </p>
+            </div>
+          )}
+          <Input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageChange}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <Label htmlFor="registrationNumber">Registration Number *</Label>
+        <Input
+          id="registrationNumber"
+          placeholder="e.g., ECO-1234"
+          value={registrationNumber}
+          onChange={(e) => setRegistrationNumber(e.target.value)}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3">
+          <Label htmlFor="truckType">Truck Type *</Label>
+          <Select value={truckType} onValueChange={(value) => setTruckType(value as TruckType)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Type</SelectLabel>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="recyclables">Recyclables</SelectItem>
+                <SelectItem value="e-waste">E-Waste</SelectItem>
+                <SelectItem value="organic">Organic</SelectItem>
+                <SelectItem value="hazardous">Hazardous</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid gap-3">
+          <Label htmlFor="capacity">Capacity (kg) *</Label>
+          <Input
+            id="capacity"
+            type="number"
+            placeholder="e.g., 5000"
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <Label htmlFor="assignedTeam">Assigned Team (Optional)</Label>
+        <Select value={assignedTeam} onValueChange={setAssignedTeam}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select team" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Teams</SelectLabel>
+              <SelectItem value="none">None</SelectItem>
+              {teams?.map((team: any) => (
+                <SelectItem key={team._id} value={team._id}>
+                  {team.team_name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline" type="button">Cancel</Button>
+        </DialogClose>
+        <Button type="submit" disabled={createTruckMutation.isPending}>
+          {createTruckMutation.isPending ? "Adding..." : "Add Truck"}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+
   if (!trucks || trucks.length === 0) {
     return (
       <div className="space-y-6">
@@ -222,127 +355,14 @@ export default function Trucks() {
                 Add Truck
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Truck</DialogTitle>
                 <DialogDescription>
                   Enter truck details below and upload an image to add a new truck to your fleet.
                 </DialogDescription>
               </DialogHeader>
-
-              <form className="grid gap-4" onSubmit={handleCreateTruck}>
-                <div className="grid gap-3">
-                  <Label htmlFor="image">Truck Image *</Label>
-                  <div className="flex flex-col gap-3">
-                    {imagePreview ? (
-                      <div className="relative w-full h-48 border rounded-lg overflow-hidden">
-                        <Image
-                          src={imagePreview}
-                          alt="Truck preview"
-                          fill
-                          className="object-cover"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-2 right-2"
-                          onClick={handleRemoveImage}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                        <Label htmlFor="image-upload" className="cursor-pointer">
-                          <span className="text-sm text-muted-foreground">
-                            Click to upload truck image
-                          </span>
-                          <Input
-                            id="image-upload"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleImageChange}
-                          />
-                        </Label>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="registrationNumber">Registration Number *</Label>
-                  <Input
-                    id="registrationNumber"
-                    placeholder="e.g., ECO-1234"
-                    value={registrationNumber}
-                    onChange={(e) => setRegistrationNumber(e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-3">
-                    <Label htmlFor="truckType">Truck Type *</Label>
-                    <Select value={truckType} onValueChange={(value) => setTruckType(value as TruckType)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectLabel>Type</SelectLabel>
-                          <SelectItem value="general">General</SelectItem>
-                          <SelectItem value="recyclables">Recyclables</SelectItem>
-                          <SelectItem value="e-waste">E-Waste</SelectItem>
-                          <SelectItem value="organic">Organic</SelectItem>
-                          <SelectItem value="hazardous">Hazardous</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-3">
-                    <Label htmlFor="capacity">Capacity (kg) *</Label>
-                    <Input
-                      id="capacity"
-                      type="number"
-                      placeholder="e.g., 5000"
-                      value={capacity}
-                      onChange={(e) => setCapacity(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="assignedTeam">Assigned Team (Optional)</Label>
-                  <Select value={assignedTeam} onValueChange={setAssignedTeam}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Teams</SelectLabel>
-                        <SelectItem value="none">None</SelectItem>
-                        {teams?.map((team: any) => (
-                          <SelectItem key={team._id} value={team._id}>
-                            {team.team_name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit" disabled={createTruckMutation.isPending}>
-                    {createTruckMutation.isPending ? "Adding..." : "Add Truck"}
-                  </Button>
-                </DialogFooter>
-              </form>
+              <CreateTruckForm />
             </DialogContent>
           </Dialog>
         </div>
@@ -367,127 +387,14 @@ export default function Trucks() {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Truck</DialogTitle>
               <DialogDescription>
                 Enter truck details below and upload an image to add a new truck to your fleet.
               </DialogDescription>
             </DialogHeader>
-
-            <form className="grid gap-4" onSubmit={handleCreateTruck}>
-              <div className="grid gap-3">
-                <Label htmlFor="image">Truck Image *</Label>
-                <div className="flex flex-col gap-3">
-                  {imagePreview ? (
-                    <div className="relative w-full h-48 border rounded-lg overflow-hidden">
-                      <Image
-                        src={imagePreview}
-                        alt="Truck preview"
-                        fill
-                        className="object-cover"
-                      />
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2"
-                        onClick={handleRemoveImage}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                      <Label htmlFor="image-upload" className="cursor-pointer">
-                        <span className="text-sm text-muted-foreground">
-                          Click to upload truck image
-                        </span>
-                        <Input
-                          id="image-upload"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageChange}
-                        />
-                      </Label>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <Label htmlFor="registrationNumber">Registration Number *</Label>
-                <Input
-                  id="registrationNumber"
-                  placeholder="e.g., ECO-1234"
-                  value={registrationNumber}
-                  onChange={(e) => setRegistrationNumber(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-3">
-                  <Label htmlFor="truckType">Truck Type *</Label>
-                  <Select value={truckType} onValueChange={(value) => setTruckType(value as TruckType)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectLabel>Type</SelectLabel>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="recyclables">Recyclables</SelectItem>
-                        <SelectItem value="e-waste">E-Waste</SelectItem>
-                        <SelectItem value="organic">Organic</SelectItem>
-                        <SelectItem value="hazardous">Hazardous</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="capacity">Capacity (kg) *</Label>
-                  <Input
-                    id="capacity"
-                    type="number"
-                    placeholder="e.g., 5000"
-                    value={capacity}
-                    onChange={(e) => setCapacity(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3">
-                <Label htmlFor="assignedTeam">Assigned Team (Optional)</Label>
-                <Select value={assignedTeam} onValueChange={setAssignedTeam}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Teams</SelectLabel>
-                      <SelectItem value="none">None</SelectItem>
-                      {teams?.map((team: any) => (
-                        <SelectItem key={team._id} value={team._id}>
-                          {team.team_name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button type="submit" disabled={createTruckMutation.isPending}>
-                  {createTruckMutation.isPending ? "Adding..." : "Add Truck"}
-                </Button>
-              </DialogFooter>
-            </form>
+            <CreateTruckForm />
           </DialogContent>
         </Dialog>
       </div>
@@ -577,7 +484,7 @@ export default function Trucks() {
 
       {/* Update Truck Dialog */}
       <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update Truck</DialogTitle>
             <DialogDescription>
@@ -673,7 +580,7 @@ export default function Trucks() {
 
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" type="button">Cancel</Button>
               </DialogClose>
               <Button type="submit" disabled={updateTruckMutation.isPending}>
                 {updateTruckMutation.isPending ? "Updating..." : "Update"}

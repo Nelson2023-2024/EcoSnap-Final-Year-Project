@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { useWasteAnalysisHistoryInfinite } from "@/hooks/useWasteAnalysis";
 import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 const ReportHistory = () => {
+  const router = useRouter();
   const {
     data,
     fetchNextPage,
@@ -94,6 +96,10 @@ const ReportHistory = () => {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const handleViewDetails = (reportId: string) => {
+    router.push(`/report-history/${reportId}`);
   };
 
   if (isLoading) {
@@ -280,6 +286,7 @@ const ReportHistory = () => {
                             variant="outline"
                             size="sm"
                             className="border-eco-primary text-eco-primary hover:bg-eco-primary hover:text-white"
+                            onClick={() => handleViewDetails(report._id)}
                           >
                             <Eye className="mr-2 h-4 w-4" />
                             View Details

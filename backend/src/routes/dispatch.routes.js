@@ -1,7 +1,3 @@
-// ============================================
-// DISPATCH ROUTES - Complete CRUD with Auto-Assignment
-// routes/dispatch.routes.js
-// ============================================
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
@@ -11,258 +7,17 @@ import { Team } from "../models/Team.model.js";
 import { Truck } from "../models/Truck.model.js";
 import { User } from "../models/User.model.js";
 import { Notification } from "../models/Notification.model.js";
+import mongoose from "mongoose";
 
 const router = Router();
 
 // ============================================
-// HELPER: Auto-assign team and truck
+// AUTOMATIC DISPATCH
 // ============================================
-const autoAssignResources = async (wasteDoc) => {
-  // Determine required truck type based on dominant waste type
-  let requiredTruckType = "general";
-  
-  if (wasteDoc.dominantWasteType) {
-    const typeMap = {
-      PET_plastic: "recyclables",
-      HDPE_plastic: "recyclables",
-      glass: "recyclables",
-      "e-waste": "e-waste",
-      textiles: "general",
-      organic: "organic",
-      metal: "recyclables",
-      paper_cardboard: "recyclables",
-      hazardous: "hazardous",
-      mixed: "general",
-    };
-    requiredTruckType = typeMap[wasteDoc.dominantWasteType] || "general";
-  }
-
-  // Find available team with matching specialization
-  const availableTeam = await Team.findOne({
-    specialization: requiredTruckType,
-    status: "active",
-    members: { $exists: true, $ne: [] }, // Has members
-  }).populate("trucks members");
-
-  if (!availableTeam) {
-    // Fallback to general team
-    const generalTeam = await Team.findOne({
-      specialization: "general",
-      status: "active",
-      members: { $exists: true, $ne: [] },
-    }).populate("trucks members");
-    
-    if (!generalTeam) {
-      throw new Error("No available teams found");
-    }
-    
-    return {
-      team: generalTeam,
-      truck: generalTeam.trucks.find(t => t.status === "available"),
-      truckType: "general",
-    };
-  }
-
-  // Find available truck from team's trucks
-  const availableTruck = availableTeam.trucks.find(
-    (truck) => truck.status === "available"
-  );
-
-  if (!availableTruck) {
-    // Try to find any available truck of required type
-    const anyTruck = await Truck.findOne({
-      truckType: requiredTruckType,
-      status: "available",
-    });
-
-    return {
-      team: availableTeam,
-      truck: anyTruck,
-      truckType: requiredTruckType,
-    };
-  }
-
-  return {
-    team: availableTeam,
-    truck: availableTruck,
-    truckType: requiredTruckType,
-  };
-};
-
-// ============================================
-// HELPER: Calculate priority
-// ============================================
-const calculatePriority = (wasteDoc) => {
-  // Urgent: hazardous or e-waste
-  if (wasteDoc.dominantWasteType === "hazardous" || 
-      wasteDoc.dominantWasteType === "e-waste") {
-    return "urgent";
-  }
-
-  // High: large volume
-  if (wasteDoc.estimatedVolume?.value > 50) {
-    return "high";
-  }
-
-  // Medium: default
-  return "medium";
-};
-
-// ============================================
-// CREATE DISPATCH (Auto or Manual)
-// ============================================
-/**
- * POST /api/dispatch
- * Create dispatch assignment (Admin only)
- */
-router.post(
-  "/",
-  isAuthenticated,
-  isAdmin,
-  asyncHandler(async (req, res) => {
-    const {
-      wasteAnalysisId,
-      assignedTeam,
-      assignedTruck,
-      scheduledDate,
-      priority,
-      autoAssign = false,
-    } = req.body;
-
-    // Validate waste analysis exists
-    const wasteDoc = await wasteAnalysis.findById(wasteAnalysisId);
-    if (!wasteDoc) {
-      return res.status(404).json({
-        success: false,
-        message: "Waste analysis not found",
-      });
-    }
-
-    // Check if already dispatched
-    const existingDispatch = await Dispatch.findOne({ wasteAnalysisId });
-    if (existingDispatch) {
-      return res.status(400).json({
-        success: false,
-        message: "Dispatch already exists for this waste analysis",
-      });
-    }
-
-    let team, truck, truckType, calculatedPriority;
-
-    // Auto-assign or manual assign
-    if (autoAssign) {
-      try {
-        const resources = await autoAssignResources(wasteDoc);
-        team = resources.team;
-        truck = resources.truck;
-        truckType = resources.truckType;
-        calculatedPriority = calculatePriority(wasteDoc);
-      } catch (error) {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
-      }
-    } else {
-      // Manual assignment
-      if (!assignedTeam || !assignedTruck) {
-        return res.status(400).json({
-          success: false,
-          message: "Team and truck are required for manual assignment",
-        });
-      }
-
-      team = await Team.findById(assignedTeam);
-      truck = await Truck.findById(assignedTruck);
-
-      if (!team || !truck) {
-        return res.status(404).json({
-          success: false,
-          message: "Team or truck not found",
-        });
-      }
-
-      truckType = truck.truckType;
-      calculatedPriority = priority || calculatePriority(wasteDoc);
-    }
-
-    // Validate truck availability
-    if (truck && truck.status !== "available") {
-      return res.status(400).json({
-        success: false,
-        message: `Truck ${truck.registrationNumber} is not available`,
-      });
-    }
-
-    // Create dispatch
-    const dispatch = await Dispatch.create({
-      wasteAnalysisId,
-      reportedBy: wasteDoc.analysedBy,
-      assignedTeam: team._id,
-      assignedTruck: truck?._id,
-      truckType,
-      status: "assigned",
-      priority: calculatedPriority,
-      location: wasteDoc.location,
-      scheduledDate: scheduledDate || new Date(Date.now() + 24 * 60 * 60 * 1000), // Default: tomorrow
-      assignedAt: new Date(),
-    });
-
-    // Update truck status
-    if (truck) {
-      truck.status = "in_use";
-      await truck.save();
-    }
-
-    // Update waste analysis status
-    wasteDoc.status = "dispatched";
-    await wasteDoc.save();
-
-    // Notify all team members
-    for (const memberId of team.members) {
-      await Notification.create({
-        user: memberId,
-        type: "dispatch_assigned",
-        title: "🚚 New Collection Assignment",
-        message: `New ${truckType} collection at ${wasteDoc.location.address || "specified location"}. Priority: ${calculatedPriority}`,
-        relatedModel: "Dispatch",
-        relatedId: dispatch._id,
-        priority: calculatedPriority === "urgent" ? "urgent" : "high",
-      });
-    }
-
-    // Notify reporter (user who reported the waste)
-    await Notification.create({
-      user: wasteDoc.analysedBy,
-      type: "dispatch_update",
-      title: "Collection Scheduled ✅",
-      message: `Your waste report has been assigned to ${team.name}. Collection scheduled for ${new Date(dispatch.scheduledDate).toLocaleDateString()}`,
-      relatedModel: "Dispatch",
-      relatedId: dispatch._id,
-      priority: "normal",
-    });
-
-    const populatedDispatch = await Dispatch.findById(dispatch._id)
-      .populate("wasteAnalysisId")
-      .populate("assignedTeam", "name specialization members")
-      .populate("assignedTruck", "registrationNumber truckType capacity")
-      .populate("reportedBy", "fullName email phoneNumber");
-
-    res.status(201).json({
-      success: true,
-      message: "Dispatch created successfully",
-      data: populatedDispatch,
-    });
-  })
-);
-
-// ============================================
-// AUTO-DISPATCH FROM WASTE ANALYSIS
-// ============================================
-/**
- * POST /api/dispatch/auto/:wasteAnalysisId
- * Automatically create dispatch for a waste analysis
- */
+// Automatically assigns best available team/truck based on:
+// - Waste type (matches team specialization)
+// - Team availability (status: active)
+// - Truck availability (status: available)
 router.post(
   "/auto/:wasteAnalysisId",
   isAuthenticated,
@@ -270,88 +25,269 @@ router.post(
   asyncHandler(async (req, res) => {
     const { wasteAnalysisId } = req.params;
 
-    const wasteDoc = await wasteAnalysis.findById(wasteAnalysisId);
-    if (!wasteDoc) {
+    // Validate waste analysis exists
+    const waste = await wasteAnalysis.findById(wasteAnalysisId);
+    if (!waste) {
       return res.status(404).json({
         success: false,
         message: "Waste analysis not found",
       });
     }
 
-    if (wasteDoc.status !== "pending_dispatch") {
+    // Check if already dispatched
+    if (waste.waste_status !== "pending_dispatch") {
       return res.status(400).json({
         success: false,
-        message: "Waste analysis is not pending dispatch",
+        message: `Waste already ${waste.waste_status}`,
       });
     }
 
-    // Auto-assign resources
-    let resources;
-    try {
-      resources = await autoAssignResources(wasteDoc);
-    } catch (error) {
-      return res.status(400).json({
+    // Determine waste specialization
+    const wasteTypeMapping = {
+      "PET plastic": "recyclables",
+      "HDPE plastic": "recyclables",
+      "Glass": "recyclables",
+      "E-waste": "e-waste",
+      "Battery": "e-waste",
+      "Electronics": "e-waste",
+      "Organic": "organic",
+      "Food waste": "organic",
+      "Hazardous": "hazardous",
+      "Chemical": "hazardous",
+    };
+
+    let requiredSpecialization = "general";
+    const dominantType = waste.waste_dominantWasteType || "";
+
+    // Match dominant waste type to specialization
+    for (const [key, spec] of Object.entries(wasteTypeMapping)) {
+      if (dominantType.toLowerCase().includes(key.toLowerCase())) {
+        requiredSpecialization = spec;
+        break;
+      }
+    }
+
+    // Find available team with matching specialization
+    let team = await Team.findOne({
+      team_specialization: requiredSpecialization,
+      team_status: "active",
+    }).populate("team_trucks");
+
+    // Fallback to general team if no specialized team found
+    if (!team) {
+      team = await Team.findOne({
+        team_specialization: "general",
+        team_status: "active",
+      }).populate("team_trucks");
+    }
+
+    if (!team) {
+      return res.status(404).json({
         success: false,
-        message: error.message,
+        message: "No available teams found",
       });
     }
 
-    const priority = calculatePriority(wasteDoc);
-
-    const dispatch = await Dispatch.create({
-      wasteAnalysisId,
-      reportedBy: wasteDoc.analysedBy,
-      assignedTeam: resources.team._id,
-      assignedTruck: resources.truck?._id,
-      truckType: resources.truckType,
-      status: "assigned",
-      priority,
-      location: wasteDoc.location,
-      scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      assignedAt: new Date(),
+    // Find available truck from team
+    const availableTruck = await Truck.findOne({
+      _id: { $in: team.team_trucks },
+      truck_status: "available",
     });
 
-    if (resources.truck) {
-      resources.truck.status = "in_use";
-      await resources.truck.save();
-    }
-
-    wasteDoc.status = "dispatched";
-    await wasteDoc.save();
-
-    // Notify team members
-    for (const memberId of resources.team.members) {
-      await Notification.create({
-        user: memberId,
-        type: "dispatch_assigned",
-        title: "🚚 New Collection Assignment",
-        message: `Auto-assigned ${resources.truckType} collection. Priority: ${priority}`,
-        relatedModel: "Dispatch",
-        relatedId: dispatch._id,
-        priority: priority === "urgent" ? "urgent" : "high",
+    if (!availableTruck) {
+      return res.status(404).json({
+        success: false,
+        message: "No available trucks found for this team",
       });
     }
 
-    // Notify reporter
+    // Calculate scheduled date (24-48 hours from now)
+    const scheduledDate = new Date();
+    scheduledDate.setHours(scheduledDate.getHours() + 24);
+
+    const estimatedArrival = new Date(scheduledDate);
+    estimatedArrival.setHours(estimatedArrival.getHours() + 2);
+
+    // Create dispatch
+    const dispatch = await Dispatch.create({
+      dispatch_wasteAnalysis: waste._id,
+      dispatch_assignedTeam: team._id,
+      dispatch_assignedTruck: availableTruck._id,
+      dispatch_pickupLocation: {
+        type: "Point",
+        coordinates: waste.waste_location.waste_coordinates,
+        address: waste.waste_location.waste_address,
+      },
+      dispatch_status: "assigned",
+      dispatch_scheduledDate: scheduledDate,
+      dispatch_estimatedArrival: estimatedArrival,
+      dispatch_priority: "normal",
+    });
+
+    // Update waste status
+    waste.waste_status = "dispatched";
+    await waste.save();
+
+    // Update truck status
+    availableTruck.truck_status = "in_use";
+    await availableTruck.save();
+
+    // Notify user who reported the waste
     await Notification.create({
-      user: wasteDoc.analysedBy,
-      type: "dispatch_update",
-      title: "Collection Scheduled ✅",
-      message: `Your waste report has been processed. Team dispatched!`,
+      user: waste.waste_analysedBy,
+      type: "dispatch_assigned",
+      title: "Pickup Scheduled! 🚚",
+      message: `Your waste report has been assigned. Expected pickup: ${scheduledDate.toLocaleDateString()}`,
       relatedModel: "Dispatch",
       relatedId: dispatch._id,
+      metadata: { dispatchId: dispatch._id },
     });
 
-    const populatedDispatch = await Dispatch.findById(dispatch._id)
-      .populate("wasteAnalysisId")
-      .populate("assignedTeam")
-      .populate("assignedTruck")
-      .populate("reportedBy", "fullName email");
+    // Notify team members
+    const teamMembers = await User.find({ assignedTeams: team._id });
+    for (const member of teamMembers) {
+      await Notification.create({
+        user: member._id,
+        type: "dispatch_assigned",
+        title: "New Pickup Assignment 📋",
+        message: `New ${requiredSpecialization} waste pickup at ${waste.waste_location.waste_address}`,
+        relatedModel: "Dispatch",
+        relatedId: dispatch._id,
+        priority: "high",
+      });
+    }
 
     res.status(201).json({
       success: true,
-      message: "Auto-dispatch created successfully",
-      data: populatedDispatch,
+      message: "Dispatch created automatically",
+      data: dispatch,
+    });
+  })
+);
+
+// ============================================
+// MANUAL DISPATCH
+// ============================================
+// Admin manually assigns specific team and truck
+router.post(
+  "/manual",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { wasteAnalysisId, teamId, truckId, scheduledDate, priority } =
+      req.body;
+
+    // Validate required fields
+    if (!wasteAnalysisId || !teamId || !truckId) {
+      return res.status(400).json({
+        success: false,
+        message: "wasteAnalysisId, teamId, and truckId are required",
+      });
+    }
+
+    // Validate waste analysis
+    const waste = await wasteAnalysis.findById(wasteAnalysisId);
+    if (!waste) {
+      return res.status(404).json({
+        success: false,
+        message: "Waste analysis not found",
+      });
+    }
+
+    if (waste.waste_status !== "pending_dispatch") {
+      return res.status(400).json({
+        success: false,
+        message: `Waste already ${waste.waste_status}`,
+      });
+    }
+
+    // Validate team
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return res.status(404).json({
+        success: false,
+        message: "Team not found",
+      });
+    }
+
+    // Validate truck
+    const truck = await Truck.findById(truckId);
+    if (!truck) {
+      return res.status(404).json({
+        success: false,
+        message: "Truck not found",
+      });
+    }
+
+    // Check if truck belongs to team
+    if (!team.team_trucks.includes(truck._id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Truck does not belong to selected team",
+      });
+    }
+
+    // Parse scheduled date or default to 24 hours
+    const pickupDate = scheduledDate
+      ? new Date(scheduledDate)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const estimatedArrival = new Date(pickupDate);
+    estimatedArrival.setHours(estimatedArrival.getHours() + 2);
+
+    // Create dispatch
+    const dispatch = await Dispatch.create({
+      dispatch_wasteAnalysis: waste._id,
+      dispatch_assignedTeam: team._id,
+      dispatch_assignedTruck: truck._id,
+      dispatch_pickupLocation: {
+        type: "Point",
+        coordinates: waste.waste_location.waste_coordinates,
+        address: waste.waste_location.waste_address,
+      },
+      dispatch_status: "assigned",
+      dispatch_scheduledDate: pickupDate,
+      dispatch_estimatedArrival: estimatedArrival,
+      dispatch_priority: priority || "normal",
+    });
+
+    // Update waste status
+    waste.waste_status = "dispatched";
+    await waste.save();
+
+    // Update truck status
+    truck.truck_status = "in_use";
+    await truck.save();
+
+    // Notify user
+    await Notification.create({
+      user: waste.waste_analysedBy,
+      type: "dispatch_assigned",
+      title: "Pickup Scheduled! 🚚",
+      message: `Your waste report has been assigned. Expected pickup: ${pickupDate.toLocaleDateString()}`,
+      relatedModel: "Dispatch",
+      relatedId: dispatch._id,
+      metadata: { dispatchId: dispatch._id },
+    });
+
+    // Notify team members
+    const teamMembers = await User.find({ assignedTeams: team._id });
+    for (const member of teamMembers) {
+      await Notification.create({
+        user: member._id,
+        type: "dispatch_assigned",
+        title: "New Pickup Assignment 📋",
+        message: `Manual assignment: Pickup at ${waste.waste_location.waste_address}`,
+        relatedModel: "Dispatch",
+        relatedId: dispatch._id,
+        priority: "high",
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Dispatch created manually",
+      data: dispatch,
     });
   })
 );
@@ -359,74 +295,42 @@ router.post(
 // ============================================
 // GET ALL DISPATCHES
 // ============================================
-/**
- * GET /api/dispatch
- * Get all dispatches with filters
- */
 router.get(
   "/",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const {
-      status,
-      priority,
-      truckType,
-      assignedTeam,
-      page = 1,
-      limit = 20,
-    } = req.query;
+    const { status, teamId, priority } = req.query;
 
-    const query = {};
-    if (status) query.status = status;
-    if (priority) query.priority = priority;
-    if (truckType) query.truckType = truckType;
-    if (assignedTeam) query.assignedTeam = assignedTeam;
+    const filter = {};
+    if (status) filter.dispatch_status = status;
+    if (teamId) filter.dispatch_assignedTeam = teamId;
+    if (priority) filter.dispatch_priority = priority;
 
-    // If collector, show only their team's dispatches
-    if (req.user.role === "collector" && req.user.assignedTeams?.length > 0) {
-      query.assignedTeam = { $in: req.user.assignedTeams };
-    }
-
-    const dispatches = await Dispatch.find(query)
-      .populate("wasteAnalysisId", "dominantWasteType estimatedVolume imageURL")
-      .populate("assignedTeam", "name specialization")
-      .populate("assignedTruck", "registrationNumber truckType")
-      .populate("reportedBy", "fullName email phoneNumber")
-      .sort({ priority: -1, createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-
-    const total = await Dispatch.countDocuments(query);
+    const dispatches = await Dispatch.find(filter)
+      .populate("dispatch_wasteAnalysis")
+      .populate("dispatch_assignedTeam", "team_name team_specialization")
+      .populate("dispatch_assignedTruck", "truck_registrationNumber")
+      .sort({ dispatch_createdAt: -1 });
 
     res.json({
       success: true,
+      results: dispatches.length,
       data: dispatches,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit)),
-      },
     });
   })
 );
 
 // ============================================
-// GET DISPATCH BY ID
+// GET SINGLE DISPATCH
 // ============================================
-/**
- * GET /api/dispatch/:id
- * Get specific dispatch details
- */
 router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const dispatch = await Dispatch.findById(req.params.id)
-      .populate("wasteAnalysisId")
-      .populate("assignedTeam")
-      .populate("assignedTruck")
-      .populate("reportedBy", "fullName email phoneNumber");
+      .populate("dispatch_wasteAnalysis")
+      .populate("dispatch_assignedTeam")
+      .populate("dispatch_assignedTruck");
 
     if (!dispatch) {
       return res.status(404).json({
@@ -445,29 +349,20 @@ router.get(
 // ============================================
 // UPDATE DISPATCH STATUS
 // ============================================
-/**
- * PATCH /api/dispatch/:id/status
- * Update dispatch status
- */
-
 router.patch(
   "/:id/status",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const { status, verificationPhotos, issues } = req.body;
+    const { status, collectionNotes } = req.body;
 
-    if (!["pending", "assigned", "in_progress", "completed"].includes(status)) {
+    if (!status) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status",
+        message: "Status is required",
       });
     }
 
-    const dispatch = await Dispatch.findById(req.params.id)
-      .populate("assignedTeam")
-      .populate("assignedTruck")
-      .populate("wasteAnalysisId");
-
+    const dispatch = await Dispatch.findById(req.params.id);
     if (!dispatch) {
       return res.status(404).json({
         success: false,
@@ -475,104 +370,71 @@ router.patch(
       });
     }
 
-    // Update status and timestamps
-    dispatch.status = status;
-    
-    if (status === "in_progress" && !dispatch.dispatchedAt) {
-      dispatch.dispatchedAt = new Date();
-    }
-    
-    if (status === "completed" && !dispatch.completedAt) {
-      dispatch.completedAt = new Date();
-      
-      // Release truck
-      if (dispatch.assignedTruck) {
-        const truck = await Truck.findById(dispatch.assignedTruck);
-        if (truck) {
-          truck.status = "available";
-          await truck.save();
-        }
-      }
+    const oldStatus = dispatch.dispatch_status;
+    dispatch.dispatch_status = status;
 
-      // Update waste analysis status
-      if (dispatch.wasteAnalysisId) {
-        const waste = await wasteAnalysis.findById(dispatch.wasteAnalysisId);
-        if (waste) {
-          waste.status = "collected";
-          await waste.save();
-        }
-      }
-
-      // Award bonus points to reporter for successful collection
-      const reportedBy = dispatch.reportedBy;
-      await User.findByIdAndUpdate(reportedBy, { $inc: { points: 20 } });
-
-      // Notify reporter of completion
-      await Notification.create({
-        user: reportedBy,
-        type: "cleanup_verified",
-        title: "Collection Completed! 🎉",
-        message: "Your reported waste has been successfully collected. +20 bonus points!",
-        relatedModel: "Dispatch",
-        relatedId: dispatch._id,
-        priority: "high",
-      });
+    if (collectionNotes) {
+      dispatch.dispatch_collectionNotes = collectionNotes;
     }
 
-    if (verificationPhotos) {
-      dispatch.verificationPhotos = verificationPhotos;
-    }
+    // Handle completion
+    if (status === "collected" || status === "completed") {
+      dispatch.dispatch_actualCollectionDate = new Date();
+      dispatch.dispatch_collectionVerified = true;
 
-    if (issues) {
-      dispatch.issues.push({
-        description: issues,
-        reportedAt: new Date(),
-      });
-    }
+      // Award points
+      const pointsToAward = 50;
+      dispatch.dispatch_pointsAwarded = pointsToAward;
 
-    await dispatch.save();
+      const waste = await wasteAnalysis.findById(
+        dispatch.dispatch_wasteAnalysis
+      );
+      if (waste) {
+        waste.waste_status = "collected";
+        await waste.save();
 
-    // Notify team members of status change
-    if (dispatch.assignedTeam?.members) {
-      for (const memberId of dispatch.assignedTeam.members) {
+        // Award user
+        await User.findByIdAndUpdate(waste.waste_analysedBy, {
+          $inc: { points: pointsToAward },
+        });
+
+        // Notify user
         await Notification.create({
-          user: memberId,
-          type: "dispatch_update",
-          title: `Dispatch ${status.replace('_', ' ').toUpperCase()}`,
-          message: `Collection status updated to: ${status}`,
+          user: waste.waste_analysedBy,
+          type: "dispatch_completed",
+          title: "Waste Collected! ✅",
+          message: `Your reported waste has been collected. You earned ${pointsToAward} points!`,
           relatedModel: "Dispatch",
           relatedId: dispatch._id,
         });
       }
+
+      // Free up truck
+      const truck = await Truck.findById(dispatch.dispatch_assignedTruck);
+      if (truck) {
+        truck.truck_status = "available";
+        await truck.save();
+      }
     }
+
+    await dispatch.save();
 
     res.json({
       success: true,
-      message: "Dispatch status updated",
+      message: `Dispatch status updated from ${oldStatus} to ${status}`,
       data: dispatch,
     });
   })
 );
 
 // ============================================
-// UPDATE DISPATCH
+// DELETE DISPATCH (Cancel)
 // ============================================
-/**
- * PUT /api/dispatch/:id
- * Update dispatch details (Admin only)
- */
-router.put(
+router.delete(
   "/:id",
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const {
-      assignedTeam,
-      assignedTruck,
-      scheduledDate,
-      priority,
-    } = req.body;
-
     const dispatch = await Dispatch.findById(req.params.id);
 
     if (!dispatch) {
@@ -582,202 +444,24 @@ router.put(
       });
     }
 
-    // Handle team reassignment
-    if (assignedTeam && assignedTeam !== dispatch.assignedTeam?.toString()) {
-      const newTeam = await Team.findById(assignedTeam);
-      if (!newTeam) {
-        return res.status(404).json({
-          success: false,
-          message: "Team not found",
-        });
-      }
-
-      const oldTeamId = dispatch.assignedTeam;
-      dispatch.assignedTeam = assignedTeam;
-
-      // Notify old team members
-      if (oldTeamId) {
-        const oldTeam = await Team.findById(oldTeamId);
-        if (oldTeam) {
-          for (const memberId of oldTeam.members) {
-            await Notification.create({
-              user: memberId,
-              type: "dispatch_update",
-              title: "Dispatch Reassigned",
-              message: `Collection has been reassigned to another team`,
-              relatedModel: "Dispatch",
-              relatedId: dispatch._id,
-            });
-          }
-        }
-      }
-
-      // Notify new team members
-      for (const memberId of newTeam.members) {
-        await Notification.create({
-          user: memberId,
-          type: "dispatch_assigned",
-          title: "New Assignment",
-          message: `You have been assigned a collection task`,
-          relatedModel: "Dispatch",
-          relatedId: dispatch._id,
-          priority: "high",
-        });
-      }
+    // Free up resources
+    const waste = await wasteAnalysis.findById(dispatch.dispatch_wasteAnalysis);
+    if (waste && waste.waste_status === "dispatched") {
+      waste.waste_status = "pending_dispatch";
+      await waste.save();
     }
 
-    // Handle truck reassignment
-    if (assignedTruck) {
-      const newTruck = await Truck.findById(assignedTruck);
-      if (!newTruck) {
-        return res.status(404).json({
-          success: false,
-          message: "Truck not found",
-        });
-      }
-
-      // Release old truck
-      if (dispatch.assignedTruck) {
-        const oldTruck = await Truck.findById(dispatch.assignedTruck);
-        if (oldTruck) {
-          oldTruck.status = "available";
-          await oldTruck.save();
-        }
-      }
-
-      // Assign new truck
-      newTruck.status = "in_use";
-      await newTruck.save();
-      dispatch.assignedTruck = assignedTruck;
+    const truck = await Truck.findById(dispatch.dispatch_assignedTruck);
+    if (truck && truck.truck_status === "in_use") {
+      truck.truck_status = "available";
+      await truck.save();
     }
-
-    if (scheduledDate) dispatch.scheduledDate = scheduledDate;
-    if (priority) dispatch.priority = priority;
-
-    await dispatch.save();
-
-    const updatedDispatch = await Dispatch.findById(dispatch._id)
-      .populate("wasteAnalysisId")
-      .populate("assignedTeam")
-      .populate("assignedTruck")
-      .populate("reportedBy");
-
-    res.json({
-      success: true,
-      message: "Dispatch updated successfully",
-      data: updatedDispatch,
-    });
-  })
-);
-
-// ============================================
-// DELETE DISPATCH
-// ============================================
-/**
- * DELETE /api/dispatch/:id
- * Delete/cancel dispatch (Admin only)
- */
-router.delete(
-  "/:id",
-  isAuthenticated,
-  isAdmin,
-  asyncHandler(async (req, res) => {
-    const dispatch = await Dispatch.findById(req.params.id)
-      .populate("assignedTeam")
-      .populate("assignedTruck")
-      .populate("wasteAnalysisId");
-
-    if (!dispatch) {
-      return res.status(404).json({
-        success: false,
-        message: "Dispatch not found",
-      });
-    }
-
-    // Release truck if assigned
-    if (dispatch.assignedTruck) {
-      const truck = await Truck.findById(dispatch.assignedTruck);
-      if (truck) {
-        truck.status = "available";
-        await truck.save();
-      }
-    }
-
-    // Reset waste analysis status
-    if (dispatch.wasteAnalysisId) {
-      const waste = await wasteAnalysis.findById(dispatch.wasteAnalysisId);
-      if (waste) {
-        waste.status = "pending_dispatch";
-        await waste.save();
-      }
-    }
-
-    // Notify team members
-    if (dispatch.assignedTeam?.members) {
-      for (const memberId of dispatch.assignedTeam.members) {
-        await Notification.create({
-          user: memberId,
-          type: "dispatch_update",
-          title: "Dispatch Cancelled",
-          message: "A collection assignment has been cancelled",
-          relatedModel: "Dispatch",
-          relatedId: dispatch._id,
-        });
-      }
-    }
-
-    // Notify reporter
-    await Notification.create({
-      user: dispatch.reportedBy,
-      type: "dispatch_update",
-      title: "Collection Cancelled",
-      message: "The scheduled collection has been cancelled. We'll reschedule soon.",
-      relatedModel: "Dispatch",
-      relatedId: dispatch._id,
-      priority: "high",
-    });
 
     await dispatch.deleteOne();
 
     res.json({
       success: true,
-      message: "Dispatch cancelled successfully",
-    });
-  })
-);
-
-// ============================================
-// GET DISPATCH STATISTICS
-// ============================================
-/**
- * GET /api/dispatch/stats/overview
- * Get dispatch statistics (Admin only)
- */
-router.get(
-  "/stats/overview",
-  isAuthenticated,
-  isAdmin,
-  asyncHandler(async (req, res) => {
-    const stats = await Dispatch.aggregate([
-      {
-        $facet: {
-          byStatus: [
-            { $group: { _id: "$status", count: { $sum: 1 } } },
-          ],
-          byPriority: [
-            { $group: { _id: "$priority", count: { $sum: 1 } } },
-          ],
-          byTruckType: [
-            { $group: { _id: "$truckType", count: { $sum: 1 } } },
-          ],
-          total: [{ $count: "total" }],
-        },
-      },
-    ]);
-
-    res.json({
-      success: true,
-      data: stats[0],
+      message: "Dispatch cancelled and deleted",
     });
   })
 );

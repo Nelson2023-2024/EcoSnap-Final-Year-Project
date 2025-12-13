@@ -14,6 +14,8 @@ import {
   Gift,
   History,
   LogOut,
+  Bell,
+  UserCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -126,6 +128,19 @@ const Navbar = () => {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <Link href="/profile">
+                    <DropdownMenuItem>
+                      <UserCircle className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/notifications">
+                    <DropdownMenuItem>
+                      <Bell className="mr-2 h-4 w-4" />
+                      <span>Notifications</span>
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => logout()} disabled={isLoggingOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
@@ -215,6 +230,18 @@ const Navbar = () => {
                       {user.fullName}
                     </span>
                   </div>
+                  <Link href="/profile" onClick={() => setIsMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <UserCircle className="mr-2 w-4 h-4" />
+                      Profile
+                    </Button>
+                  </Link>
+                  <Link href="/notifications" onClick={() => setIsMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      <Bell className="mr-2 w-4 h-4" />
+                      Notifications
+                    </Button>
+                  </Link>
                   <Button
                     variant="outline"
                     className="w-full justify-start"
