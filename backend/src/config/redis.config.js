@@ -5,7 +5,7 @@ import { ENV } from "./env.config.js";
 // Initialize client.
 let redisClient = redis.createClient({
   socket: {
-    host: ENV.REDIS_URL,
+    host: "localhost",
     port: ENV.REDIS_PORT,
   },
 });

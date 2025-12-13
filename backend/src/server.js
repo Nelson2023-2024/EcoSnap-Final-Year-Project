@@ -1,7 +1,6 @@
 import express from "express";
 import passport from "passport";
 import { ENV } from "./config/env.config.js";
-import { connectToMongoDBWithRetry } from "./config/db.config.js";
 import { sessionMiddleware } from "./middleware/redis.middleware.js";
 import { rootRouter } from "./routes/root.routes.js";
 import cors from "cors";
@@ -37,7 +36,7 @@ app.use("/api", rootRouter);
 
 app.listen(ENV.PORT, () => {
   console.log(`Server running on http://localhost:${ENV.PORT}`);
-  console.log(`Google API AI`, ENV.GOOGLE_API_KEY);
-  connectToMongoDBWithRetry();
-  testConnection();
+  // console.log(`Google API AI`, ENV.GOOGLE_API_KEY);
+  // connectToMongoDBWithRetry();
+  // testConnection();
 });
