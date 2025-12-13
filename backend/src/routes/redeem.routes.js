@@ -1,11 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-
 import { isAuthenticated } from "../middleware/auth.middleware.js";
-import { Product } from "../models/Product.model.js";
-import { Notification } from "../models/Notification.model.js";
-import { Redemption } from "../models/Redemption.model.js";
-import { User } from "../models/user.model.js";
+import { prisma } from "../config/prisma.config.js";
 
 const router = Router();
 
@@ -14,97 +10,151 @@ router.post(
   "/:productId",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const userId = req.user._id;
+    const userId = req.user.user_id;
     const productId = req.params.productId;
 
     const [user, product] = await Promise.all([
-      User.findById(userId),
-      Product.findOne({ product_id: productId }),
+      prisma.user.findUnique({
+        where: { user_id: userId },
+      }),
+      prisma.product.findUnique({
+        where: { product_id: productId },
+      }),
     ]);
 
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
     if (product.product_stock <= 0 || !product.product_isAvailable) {
-      return res.status(400).json({ success: false, message: "Product is out of stock" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Product is out of stock" });
     }
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
-    if (user.points < product.product_pointsCost) {
+    if (user.user_points < product.product_pointsCost) {
       return res.status(400).json({
         success: false,
-        message: `You need ${product.product_pointsCost - user.points} more points`,
+        message: `You need ${
+          product.product_pointsCost - user.user_points
+        } more points`,
       });
     }
 
-    // Deduct points & reduce stock
-    user.points -= product.product_pointsCost;
-    product.product_stock -= 1;
+    // Create order and update user/product in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create order
+      const order = await tx.order.create({
+        data: {
+          order_userId: userId,
+          order_productId: productId,
+          order_quantity: 1,
+          order_totalCost: product.product_pointsCost,
+          order_status: "confirmed",
+        },
+      });
 
-    // ---------------- CREATE REDEMPTION RECORD (prefixed fields) ----------------
-    const redemption = await Redemption.create({
-      redemption_user: user._id,
-      redemption_product: product._id,
-      redemption_productName: product.product_name,
-      redemption_pointsCost: product.product_pointsCost,
-      redemption_status: "fulfilled",
-    });
+      // Deduct points from user
+      const updatedUser = await tx.user.update({
+        where: { user_id: userId },
+        data: {
+          user_points: {
+            decrement: product.product_pointsCost,
+          },
+        },
+      });
 
-    // Save in parallel
-    await Promise.all([user.save(), product.save()]);
+      // Reduce product stock
+      const updatedProduct = await tx.product.update({
+        where: { product_id: productId },
+        data: {
+          product_stock: {
+            decrement: 1,
+          },
+        },
+      });
 
-    // Create notification
-    await Notification.create({
-      user: user._id,
-      type: "reward_earned",
-      title: "Reward Redeemed",
-      message: `You successfully redeemed ${product.product_name} for ${product.product_pointsCost} points.`,
-      relatedModel: "Reward",
-      relatedId: product._id,
-      priority: "normal",
+      // Create reward record (debit transaction)
+      const reward = await tx.reward.create({
+        data: {
+          reward_userId: userId,
+          reward_pointsEarned: -product.product_pointsCost, // Negative for redemption
+          reward_reason: "redemption",
+          reward_transactionType: "debit",
+        },
+      });
+
+      // Create notification for user
+      await tx.notification.create({
+        data: {
+          notification_userId: userId,
+          notification_entityType: "order",
+          notification_entityId: order.order_id,
+          notification_type: "order_status",
+          notification_title: "Reward Redeemed! 🎉",
+          notification_message: `You successfully redeemed ${product.product_name} for ${product.product_pointsCost} points.`,
+          notification_priority: "normal",
+          notification_metadata: {
+            orderId: order.order_id,
+            productId: product.product_id,
+            productName: product.product_name,
+            pointsCost: product.product_pointsCost,
+            action: "redeemed",
+          },
+        },
+      });
+
+      return { order, updatedUser, updatedProduct, reward };
     });
 
     res.status(200).json({
       success: true,
       message: `You have successfully redeemed ${product.product_name}`,
       data: {
-        product,
-        remainingPoints: user.points,
-        redemption,
+        order: result.order,
+        product: result.updatedProduct,
+        remainingPoints: result.updatedUser.user_points,
+        reward: result.reward,
       },
     });
   })
 );
 
-// ---------------- GET USER REDEMPTION COUNT ----------------
+// ---------------- GET USER ORDER/REDEMPTION COUNT ----------------
 router.get(
   "/user/count",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const count = await Redemption.countDocuments({
-      redemption_user: req.user._id,
+    const count = await prisma.order.count({
+      where: { order_userId: req.user.user_id },
     });
 
     res.json({ success: true, redemptionCount: count });
   })
 );
 
-// ---------------- GET USER REDEMPTION HISTORY ----------------
+// ---------------- GET USER ORDER/REDEMPTION HISTORY ----------------
 router.get(
   "/user/history",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const redemptions = await Redemption.find({
-      redemption_user: req.user._id,
-    })
-      .populate("redemption_product")
-      .sort({ createdAt: -1 });
+    const orders = await prisma.order.findMany({
+      where: { order_userId: req.user.user_id },
+      include: {
+        order_product: true,
+      },
+      orderBy: { order_createdAt: "desc" },
+    });
 
     res.json({
       success: true,
-      count: redemptions.length,
-      redemptions,
+      count: orders.length,
+      orders,
     });
   })
 );
