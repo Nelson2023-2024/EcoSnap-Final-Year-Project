@@ -1,8 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
-import { Team } from "../models/Team.model.js";
-import { User } from "../models/User.model.js";
+import { prisma } from "../config/prisma.config.js";
 
 const router = Router();
 
@@ -14,23 +13,33 @@ router.post(
   asyncHandler(async (req, res) => {
     const { name, specialization } = req.body;
 
-    // Validate required fields
-    if (!name || !specialization)
+    if (!name || !specialization) {
       return res.status(400).json({
         success: false,
         message: "Team name and specialization are required",
       });
+    }
 
+    // Check if team exists
     // Prevent duplicate team names
-    const existingTeam = await Team.findOne({ team_name: name });
-    if (existingTeam)
-      return res.status(400).json({ message: "Team name already exists" });
+    const existingTeam = await prisma.team.findFirst({
+      where: { team_name: name },
+    });
+
+    if (existingTeam) {
+      return res.status(400).json({
+        success: false,
+        message: "Team name already exists",
+      });
+    }
 
     // Create the team
-    const team = await Team.create({
-      team_name: name,
-      team_specialization: specialization,
-      team_status: "active", // default
+    const team = await prisma.team.create({
+      data: {
+        team_name: name,
+        team_specialization: specialization,
+        team_status: "active",
+      },
     });
 
     res.status(201).json({
@@ -47,15 +56,29 @@ router.get(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const teams = await Team.find()
-      .populate("team_members", "fullName email role")
-      .populate("team_trucks", " truck_registrationNumber");
+    const teams = await prisma.team.findMany({
+      include: {
+        team_members: {
+          include: {
+            user: {
+              select: {
+                user_fullName: true,
+                user_email: true,
+                user_role: true,
+              },
+            },
+          },
+        },
+        team_trucks: true,
+      },
+    });
 
-    if (teams.length === 0)
+    if (teams.length === 0) {
       return res.json({
         success: true,
         data: "No teams at the moment",
       });
+    }
 
     res.json({
       success: true,
@@ -70,10 +93,25 @@ router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const team = await Team.findById(req.params.id).populate(
-      "team_members",
-      "fullName email role"
-    );
+    const { id } = req.params;
+
+    const team = await prisma.team.findUnique({
+      where: { team_id: id },
+      include: {
+        team_members: {
+          include: {
+            user: {
+              select: {
+                user_fullName: true,
+                user_email: true,
+                user_role: true,
+              },
+            },
+          },
+        },
+        team_trucks: true,
+      },
+    });
 
     if (!team) {
       return res.status(404).json({
@@ -95,9 +133,11 @@ router.put(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
+    const { id } = req.params;
     const { name, specialization, status } = req.body;
 
-    const team = await Team.findById(req.params.id);
+    const team = await prisma.team.findUnique({ where: { team_id: id } });
+
     if (!team) {
       return res.status(404).json({
         success: false,
@@ -105,17 +145,19 @@ router.put(
       });
     }
 
-    // Update fields using prefixed DB keys
-    if (name) team.team_name = name;
-    if (specialization) team.team_specialization = specialization;
-    if (status) team.team_status = status;
-
-    await team.save();
+    const updatedTeam = await prisma.team.update({
+      where: { team_id: id },
+      data: {
+        team_name: name || team.team_name,
+        team_specialization: specialization || team.team_specialization,
+        team_status: status || team.team_status,
+      },
+    });
 
     res.json({
       success: true,
       message: "Team updated successfully",
-      data: team,
+      data: updatedTeam,
     });
   })
 );
@@ -125,21 +167,24 @@ router.delete(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const team = await Team.findById(req.params.id);
+    const { id } = req.params;
+
+    const team = await prisma.team.findUnique({ where: { team_id: id } });
 
     if (!team) {
-      return res.status(404).json({ message: "Team not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Team not found",
+      });
     }
 
-    // Unassign members (their field is still normal)
-    await User.updateMany(
-      { assignedTeam: team._id },
-      { $unset: { assignedTeam: "" } }
-    );
+    // Unassign members
+    await prisma.teamMember.deleteMany({ where: { teamId: id } });
 
-    await team.deleteOne();
+    // Delete team
+    await prisma.team.delete({ where: { team_id: id } });
 
-    res.status(200).json({
+    res.json({
       success: true,
       message: "Team deleted successfully",
     });

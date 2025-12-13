@@ -35,8 +35,8 @@ router.get("/me", isAuthenticated, (req, res) => {
 
 router.get("/dev-login", async (req, res) => {
   const user = {
-    id: "6913a19b1b5dab9aaed2a8a3",
-    email: "nelsonobuya18@gmail.com",
+    user_id: "9af423bc-19ec-4273-90dc-88f9aad22a8c", // must be user_id
+    user_email: "nelsonobuya18@gmail.com",
   };
   req.login(user, (err) => {
     if (err)

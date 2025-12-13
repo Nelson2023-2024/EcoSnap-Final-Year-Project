@@ -5,7 +5,7 @@ export const isAuthenticated = (req, res, next) => {
 
 export const isAdmin = (req, res, next) => {
   if (req.isAuthenticated()) {
-    if (req.user.role === "admin") {
+    if (req.user.user_role === "admin") {
       return next(); // If the user is an admin, allow access
     } else {
       return res.status(403).json({ message: "Access denied. Admins only." }); // If not an admin
