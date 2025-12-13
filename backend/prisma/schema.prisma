@@ -113,27 +113,27 @@ model WasteCategory {
 }
 
 model Dispatch {
-  dispatch_id                  String         @id @default(uuid())
-  dispatch_wasteAnalysisId     String         @unique
-  dispatch_assignedTeamId      String
-  dispatch_assignedTruckId     String
-  dispatch_locationLongitude   Float
-  dispatch_locationLatitude    Float
-  dispatch_locationAddress     String?
-  dispatch_status              DispatchStatus @default(assigned)
-  dispatch_scheduledDate       DateTime
-  dispatch_estimatedArrival    DateTime?
+  dispatch_id                   String         @id @default(uuid())
+  dispatch_wasteAnalysisId      String         @unique
+  dispatch_assignedTeamId       String
+  dispatch_assignedTruckId      String
+  dispatch_locationLongitude    Float
+  dispatch_locationLatitude     Float
+  dispatch_locationAddress      String?
+  dispatch_status               DispatchStatus @default(assigned)
+  dispatch_scheduledDate        DateTime
+  dispatch_estimatedArrival     DateTime?
   dispatch_actualCollectionDate DateTime?
-  dispatch_collectionVerified  Boolean        @default(false)
-  dispatch_collectionNotes     String?        @db.Text
-  dispatch_pointsAwarded       Int            @default(0)
-  dispatch_priority            Priority       @default(normal)
-  dispatch_createdAt           DateTime       @default(now())
-  dispatch_updatedAt           DateTime       @updatedAt
-  dispatch_wasteAnalysis       WasteAnalysis  @relation(fields: [dispatch_wasteAnalysisId], references: [waste_id], onDelete: Cascade)
-  dispatch_assignedTeam        Team           @relation(fields: [dispatch_assignedTeamId], references: [team_id])
-  dispatch_assignedTruck       Truck          @relation(fields: [dispatch_assignedTruckId], references: [truck_id])
-  dispatch_collectionImages    DispatchImage[]
+  dispatch_collectionVerified   Boolean        @default(false)
+  dispatch_collectionNotes      String?        @db.Text
+  dispatch_pointsAwarded        Int            @default(0)
+  dispatch_priority             Priority       @default(normal)
+  dispatch_createdAt            DateTime       @default(now())
+  dispatch_updatedAt            DateTime       @updatedAt
+  dispatch_wasteAnalysis        WasteAnalysis  @relation(fields: [dispatch_wasteAnalysisId], references: [waste_id], onDelete: Cascade)
+  dispatch_assignedTeam         Team           @relation(fields: [dispatch_assignedTeamId], references: [team_id])
+  dispatch_assignedTruck        Truck          @relation(fields: [dispatch_assignedTruckId], references: [truck_id])
+  dispatch_collectionImages     DispatchImage[]
 
   @@map("dispatches")
 }
@@ -148,66 +148,67 @@ model DispatchImage {
 }
 
 model Notification {
-  notification_id           String           @id @default(uuid())
-  notification_userId       String
-  notification_type         NotificationType @default(system)
-  notification_title        String
-  notification_message      String           @db.Text
-  notification_isRead       Boolean          @default(false)
-  notification_metadata     Json?
-  notification_relatedModel RelatedModel?
-  notification_relatedId    String?
-  notification_priority     Priority         @default(normal)
-  notification_status       NotificationStatus @default(active)
-  notification_createdAt    DateTime         @default(now())
-  notification_updatedAt    DateTime         @updatedAt
-  notification_user         User             @relation(fields: [notification_userId], references: [user_id], onDelete: Cascade)
+  notification_id         String             @id @default(uuid())
+  notification_userId     String
+  notification_type       NotificationType   @default(system)
+  notification_title      String
+  notification_message    String             @db.Text
+  notification_entityType String?            // "waste_analysis", "dispatch", "order", "team", "truck", "reward", "product"
+  notification_entityId   String?            // The ID of the related entity
+  notification_isRead     Boolean            @default(false)
+  notification_metadata   Json?
+  notification_priority   Priority           @default(normal)
+  notification_status     NotificationStatus @default(active)
+  notification_createdAt  DateTime           @default(now())
+  notification_updatedAt  DateTime           @updatedAt
+  notification_user       User               @relation(fields: [notification_userId], references: [user_id], onDelete: Cascade)
 
   @@index([notification_userId, notification_isRead, notification_createdAt])
   @@index([notification_type, notification_status])
+  @@index([notification_entityType, notification_entityId])
   @@map("notifications")
 }
 
 model Reward {
-  reward_id              String            @id @default(uuid())
+  reward_id              String          @id @default(uuid())
   reward_userId          String
   reward_wasteAnalysisId String?
-  reward_pointsEarned    Int               @default(0)
-  reward_reason          RewardReason      @default(waste_report)
-  reward_transactionType TransactionType   @default(credit)
-  reward_createdAt       DateTime          @default(now())
-  reward_updatedAt       DateTime          @updatedAt
-  reward_user            User              @relation(fields: [reward_userId], references: [user_id], onDelete: Cascade)
+  reward_pointsEarned    Int             @default(0)
+  reward_reason          RewardReason    @default(waste_report)
+  reward_transactionType TransactionType @default(credit)
+  reward_createdAt       DateTime        @default(now())
+  reward_updatedAt       DateTime        @updatedAt
+  reward_user            User            @relation(fields: [reward_userId], references: [user_id], onDelete: Cascade)
 
   @@map("rewards")
 }
 
 model Product {
-  product_id           String    @id @default(uuid())
-  product_name         String
-  product_description  String?   @db.Text
-  product_imageURL     String
-  product_pointsCost   Int
-  product_stock        Int       @default(0)
-  product_isAvailable  Boolean   @default(true)
-  product_createdAt    DateTime  @default(now())
-  product_updatedAt    DateTime  @updatedAt
-  product_orders       Order[]
+  product_id          String   @id @default(uuid())
+  product_name        String
+  product_description String?  @db.Text
+  product_imageURL    String
+  product_pointsCost  Int
+  product_stock       Int      @default(0)
+  product_isAvailable Boolean  @default(true)
+  product_createdAt   DateTime @default(now())
+  product_updatedAt   DateTime @updatedAt
+  product_orders      Order[]
 
   @@map("products")
 }
 
 model Order {
-  order_id         String      @id @default(uuid())
-  order_userId     String
-  order_productId  String
-  order_quantity   Int         @default(1)
-  order_totalCost  Int
-  order_status     OrderStatus @default(pending)
-  order_createdAt  DateTime    @default(now())
-  order_updatedAt  DateTime    @updatedAt
-  order_user       User        @relation(fields: [order_userId], references: [user_id], onDelete: Cascade)
-  order_product    Product     @relation(fields: [order_productId], references: [product_id])
+  order_id        String      @id @default(uuid())
+  order_userId    String
+  order_productId String
+  order_quantity  Int         @default(1)
+  order_totalCost Int
+  order_status    OrderStatus @default(pending)
+  order_createdAt DateTime    @default(now())
+  order_updatedAt DateTime    @updatedAt
+  order_user      User        @relation(fields: [order_userId], references: [user_id], onDelete: Cascade)
+  order_product   Product     @relation(fields: [order_productId], references: [product_id])
 
   @@map("orders")
 }
@@ -310,6 +311,8 @@ enum NotificationType {
   truck_status
   team_update
   system
+  order_status
+  product_update
 
   @@map("notification_type")
 }
@@ -320,17 +323,6 @@ enum NotificationStatus {
   deleted
 
   @@map("notification_status")
-}
-
-enum RelatedModel {
-  User
-  WasteAnalysis
-  Dispatch
-  Reward
-  Truck
-  Team
-
-  @@map("related_model")
 }
 
 enum RewardReason {
