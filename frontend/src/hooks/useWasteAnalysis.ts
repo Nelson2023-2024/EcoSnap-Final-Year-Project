@@ -15,6 +15,13 @@ interface WasteCategory {
   wasteAnalysisId: string;
 }
 
+interface User {
+  user_id: string;
+  user_fullName: string | null;
+  user_email: string;
+  user_phoneNumber?: string | null;
+}
+
 interface WasteAnalysisItem {
   waste_id: string;
   waste_analysedBy: string;
@@ -35,6 +42,7 @@ interface WasteAnalysisItem {
   waste_createdAt: string;
   waste_updatedAt: string;
   waste_wasteCategories: WasteCategory[];
+  waste_user?: User;
 }
 
 interface WasteAnalysisResponse {
