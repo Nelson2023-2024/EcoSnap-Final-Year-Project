@@ -7,11 +7,9 @@ import { prisma } from "../config/prisma.config.js";
 //get the user from the GoogleStrategy
 passport.serializeUser((user, done) => {
   console.log("Inside Serialize User", user);
-  // Make sure user has user_id
   if (!user.user_id) return done(new Error("User missing user_id"));
   done(null, user.user_id);
 });
-
 
 passport.deserializeUser(async (id, done) => {
   if (!id) {
@@ -28,7 +26,6 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-
 export default passport.use(
   new GoogleStrategy(
     {
@@ -39,7 +36,6 @@ export default passport.use(
       passReqToCallback: false,
       proxy: true,
     },
-    //profile is the user object
     asyncHandler(async function (accessToken, refreshToken, profile, done) {
       try {
         console.log("profile:", profile);
@@ -75,11 +71,41 @@ export default passport.use(
             },
           });
           console.log("New user created:", newUser);
+          
+          // ✅ Create login notification for new user
+          await prisma.notification.create({
+            data: {
+              notification_userId: newUser.user_id,
+              notification_type: "login",
+              notification_title: "Welcome to EcoSnap! 🌱",
+              notification_message:
+                "Your account has been created successfully. Start reporting waste to earn points!",
+              notification_metadata: {
+                firstLogin: true,
+                provider: "google",
+              },
+            },
+          });
+          
           return done(null, newUser);
         }
 
-        //if user is found
         console.log("User found:", findUser);
+        
+        // ✅ Create login notification for returning user
+        await prisma.notification.create({
+          data: {
+            notification_userId: findUser.user_id,
+            notification_type: "login",
+            notification_title: "Welcome Back! 👋",
+            notification_message: `Good to see you again, ${findUser.user_fullName || "there"}!`,
+            notification_metadata: {
+              loginTime: new Date().toISOString(),
+              provider: "google",
+            },
+          },
+        });
+        
         return done(null, findUser);
       } catch (error) {
         console.error("Google auth error:", error);

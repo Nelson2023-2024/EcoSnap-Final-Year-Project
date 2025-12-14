@@ -28,9 +28,31 @@ router.get(
 );
 
 //get the Authenticated user
+// ✅ FIXED: Transform user data to match frontend expectations
 router.get("/me", isAuthenticated, (req, res) => {
-  if (req.isAuthenticated()) res.json({ user: req.user });
-  else res.status(401).json({ message: "Not logged in" });
+  if (req.isAuthenticated() && req.user) {
+    // Transform Prisma fields to frontend format
+    const transformedUser = {
+      user_id: req.user.user_id,
+      email: req.user.user_email,
+      username: req.user.user_username,
+      firstName: req.user.user_firstName,
+      lastName: req.user.user_lastName,
+      fullName: req.user.user_fullName,
+      profileImage: req.user.user_profileImage,
+      phoneNumber: req.user.user_phoneNumber,
+      role: req.user.user_role,
+      points: req.user.user_points,
+      googleID: req.user.user_googleID,
+      authProvider: req.user.user_authProvider,
+      createdAt: req.user.user_createdAt,
+      updatedAt: req.user.user_updatedAt,
+    };
+
+    res.json({ user: transformedUser });
+  } else {
+    res.status(401).json({ message: "Not logged in" });
+  }
 });
 
 router.get("/dev-login", async (req, res) => {
