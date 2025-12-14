@@ -1,7 +1,8 @@
 "use client";
 
-import { use } from "react";
+import * as React from "react";
 import { useRouter } from "next/navigation";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,11 @@ interface ReportDetailPageProps {
   params: Promise<{ reportId: string }>;
 }
 
-const ReportDetailPage = ({ params }: ReportDetailPageProps) => {
+export default function ReportDetailPage({ params }: ReportDetailPageProps) {
   const router = useRouter();
-  const { reportId } = use(params);
+
+  // ✅ Correct way to unwrap params in Next 15/16
+  const { reportId } = React.use(params);
 
   const { data: report, isLoading, isError } = useWasteAnalysis(reportId);
 
@@ -54,19 +57,19 @@ const ReportDetailPage = ({ params }: ReportDetailPageProps) => {
       no_waste: "No Waste",
       error: "Error",
     };
-    return map[status] || status;
+    return map[status] ?? status;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
 
+  // ---------------- LOADING ----------------
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
@@ -78,16 +81,19 @@ const ReportDetailPage = ({ params }: ReportDetailPageProps) => {
     );
   }
 
+  // ---------------- ERROR ----------------
   if (isError || !report) {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <Card className="max-w-md mx-4">
           <CardContent className="pt-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600 mb-4">Failed to load report details.</p>
+            <p className="text-red-600 mb-4">
+              Failed to load report details.
+            </p>
             <Button
-              onClick={() => router.push("/report-history")}
               variant="outline"
+              onClick={() => router.push("/report-history")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Reports
@@ -98,187 +104,156 @@ const ReportDetailPage = ({ params }: ReportDetailPageProps) => {
     );
   }
 
+  // ---------------- PAGE ----------------
   return (
     <div className="min-h-screen bg-background pt-16">
-      <main className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
+      <main className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
         <Button
           variant="ghost"
-          className="mb-6 hover:bg-eco-primary/10"
           onClick={() => router.push("/report-history")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Reports
         </Button>
 
-        <div className="space-y-6">
-          {/* HEADER */}
-          <Card className="border-eco-primary/30">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold mb-2">
-                    {report.dominantWasteType || "Waste Report"}
-                  </h1>
+        {/* HEADER */}
+        <Card className="border-eco-primary/30">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold">
+                  {report.waste_dominantWasteType ?? "Waste Report"}
+                </h1>
 
-                  <div className="flex flex-wrap items-center gap-4 text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-eco-primary" />
-                      <span>{report.location.address}</span>
-                    </div>
+                <div className="flex flex-wrap gap-4 text-muted-foreground mt-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-eco-primary" />
+                    {report.waste_locationAddress ?? "Location not specified"}
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-eco-primary" />
-                      <span>{formatDate(report.createdAt)}</span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-eco-primary" />
+                    {formatDate(report.waste_createdAt)}
                   </div>
                 </div>
-
-                <Badge
-                  className={`${getStatusColor(
-                    report.status
-                  )} text-lg px-4 py-2`}
-                >
-                  {formatStatus(report.status)}
-                </Badge>
               </div>
 
-              {/* Coordinates */}
-              <div className="mt-4 p-3 bg-eco-primary/5 rounded-lg text-sm space-y-2">
-                <p className="text-muted-foreground">
-                  <span className="font-semibold">Coordinates:</span>{" "}
-                  {report.location.coordinates[1]},{" "}
-                  {report.location.coordinates[0]}
-                </p>
+              <Badge
+                className={`${getStatusColor(report.waste_status)} px-4 py-2 text-lg`}
+              >
+                {formatStatus(report.waste_status)}
+              </Badge>
+            </div>
 
-                {/* GOOGLE MAP LINK */}
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${report.location.coordinates[1]},${report.location.coordinates[0]}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-eco-primary underline hover:text-eco-primary/80"
-                >
-                  Open in Google Maps →
-                </a>
+            {/* LOCATION */}
+            <div className="p-3 bg-eco-primary/5 rounded-lg text-sm">
+              <p>
+                <strong>Coordinates:</strong>{" "}
+                {report.waste_locationLatitude.toFixed(6)},{" "}
+                {report.waste_locationLongitude.toFixed(6)}
+              </p>
+
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${report.waste_locationLatitude},${report.waste_locationLongitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-eco-primary underline"
+              >
+                Open in Google Maps →
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* IMAGE */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex gap-2">
+              <Package className="h-5 w-5 text-eco-primary" />
+              Waste Image
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <img
+              src={report.waste_imageURL}
+              alt="Waste"
+              className="w-full max-h-96 object-contain rounded-lg border"
+            />
+          </CardContent>
+        </Card>
+
+        {/* WASTE CATEGORIES */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex gap-2">
+              <Recycle className="h-5 w-5 text-eco-primary" />
+              Waste Categories
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {report.waste_wasteCategories.map((c) => (
+              <div
+                key={c.id}
+                className="p-3 border rounded-lg flex justify-between"
+              >
+                <span>{c.waste_type}</span>
+                <Badge variant="outline">{c.waste_estimatedPercentage}%</Badge>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </CardContent>
+        </Card>
 
-          {/* IMAGE */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-eco-primary" />
-                Waste Image
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg overflow-hidden border-2 border-eco-primary/20">
-                <img
-                  src={report.imageURL}
-                  alt="Waste"
-                  className="w-full h-auto max-h-96 object-contain bg-muted"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* WASTE CATEGORIES */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Recycle className="h-5 w-5 text-eco-primary" />
-                Waste Categories Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {report.wasteCategories.map((category, i) => (
-                  <div
-                    key={`${category.type}-${i}`}
-                    className="p-4 border border-eco-primary/20 rounded-lg hover:bg-eco-primary/5"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{category.type}</h3>
-                      <Badge
-                        variant="outline"
-                        className="text-eco-primary border-eco-primary"
-                      >
-                        {category.estimatedPercentage ?? 0}%
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* VOLUME + CONFIDENCE */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {report.estimatedVolume && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-eco-primary" />
-                    Estimated Volume
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-eco-primary">
-                    {report.estimatedVolume.value} {report.estimatedVolume.unit}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
+        {/* METRICS */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {report.waste_estimatedVolumeValue && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-eco-primary" />
-                  Analysis Confidence
+                <CardTitle className="flex gap-2">
+                  <TrendingUp className="h-5 w-5 text-eco-primary" />
+                  Estimated Volume
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-eco-primary">
-                  {report.confidenceLevel}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* POSSIBLE SOURCE */}
-          {report.possibleSource && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-eco-primary" />
-                  Possible Source (AI Inference)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {report.possibleSource}
-                </p>
+              <CardContent className="text-3xl font-bold text-eco-primary">
+                {report.waste_estimatedVolumeValue}{" "}
+                {report.waste_estimatedVolumeUnit}
               </CardContent>
             </Card>
           )}
 
-          {/* ENVIRONMENTAL IMPACT */}
-          {report.environmentalImpact && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Environmental Impact</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {report.environmentalImpact}
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Analysis Confidence</CardTitle>
+            </CardHeader>
+            <CardContent className="text-3xl font-bold text-eco-primary">
+              {report.waste_confidenceLevel ?? "N/A"}
+            </CardContent>
+          </Card>
         </div>
+
+        {/* SOURCE */}
+        {report.waste_possibleSource && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Possible Source (AI)</CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground whitespace-pre-line">
+              {report.waste_possibleSource}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* IMPACT */}
+        {report.waste_environmentalImpact && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Environmental Impact</CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground whitespace-pre-line">
+              {report.waste_environmentalImpact}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );
-};
-
-export default ReportDetailPage;
+}
