@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Award, UserCog, Plus, Trash2, Edit, Filter, LoaderIcon } from "lucide-react";
+import { Search, Award, UserCog, Plus, Trash2, Edit, LoaderIcon } from "lucide-react";
 import { useUsers, useCreateCollector, useDeleteUser, useUpdateUser } from "@/hooks/useUser";
 import { useTeams } from "@/hooks/useTeams";
 import { toast } from "react-hot-toast";
@@ -33,13 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 
 export default function Users() {
   const { data: users, isLoading, error } = useUsers();
@@ -69,16 +62,16 @@ export default function Users() {
 
   const filteredUsers = users?.filter((user: any) => {
     const matchesSearch =
-      user.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username?.toLowerCase().includes(searchTerm.toLowerCase());
+      user.user_fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.user_username?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    const matchesRole = roleFilter === "all" || user.user_role === roleFilter;
     
     return matchesSearch && matchesRole;
   }) || [];
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null) => {
     if (!name) return "U";
     return name
       .split(" ")
@@ -112,8 +105,8 @@ export default function Users() {
     }
   };
 
-  const handleDelete = async (userId: string, userName: string) => {
-    if (window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+  const handleDelete = async (userId: string, userName: string | null) => {
+    if (window.confirm(`Are you sure you want to delete user "${userName || 'this user'}"? This action cannot be undone.`)) {
       try {
         await deleteUserMutation.mutateAsync(userId);
       } catch (err) {
@@ -124,11 +117,11 @@ export default function Users() {
 
   const handleEditUser = (user: any) => {
     setSelectedUser(user);
-    setUpdateFirstName(user.firstName || "");
-    setUpdateLastName(user.lastName || "");
-    setUpdateEmail(user.email || "");
-    setUpdatePhoneNumber(user.phoneNumber || "");
-    setUpdateAssignedTeams(user.assignedTeams?.map((t: any) => t._id) || []);
+    setUpdateFirstName(user.user_firstName || "");
+    setUpdateLastName(user.user_lastName || "");
+    setUpdateEmail(user.user_email || "");
+    setUpdatePhoneNumber(user.user_phoneNumber || "");
+    setUpdateAssignedTeams(user.user_assignedTeams?.map((t: any) => t.team_id) || []);
     setUpdateDialogOpen(true);
   };
 
@@ -142,7 +135,7 @@ export default function Users() {
 
     try {
       await updateUserMutation.mutateAsync({
-        id: selectedUser._id,
+        id: selectedUser.user_id,
         firstName: updateFirstName,
         lastName: updateLastName,
         email: updateEmail,
@@ -166,12 +159,12 @@ export default function Users() {
 
   // Calculate statistics
   const totalUsers = users?.length || 0;
-  const activeCollectors = users?.filter((u: any) => u.role === "collector").length || 0;
-  const totalAdmins = users?.filter((u: any) => u.role === "admin").length || 0;
-  const regularUsers = users?.filter((u: any) => u.role === "user").length || 0;
+  const activeCollectors = users?.filter((u: any) => u.user_role === "collector").length || 0;
+  const totalAdmins = users?.filter((u: any) => u.user_role === "admin").length || 0;
+  const regularUsers = users?.filter((u: any) => u.user_role === "user").length || 0;
   const totalPoints = users?.reduce((sum: number, u: any) => sum + (u.totalPoints || 0), 0) || 0;
 
-   if (isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -181,7 +174,10 @@ export default function Users() {
       </div>
     );
   }
-  if (error) return <p className="text-center text-red-500 py-10">Failed to load users</p>;
+
+  if (error) {
+    return <p className="text-center text-red-500 py-10">Failed to load users</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -249,7 +245,7 @@ export default function Users() {
                     <SelectGroup>
                       <SelectLabel>Teams</SelectLabel>
                       {teams?.map((team: any) => (
-                        <SelectItem key={team._id} value={team._id}>
+                        <SelectItem key={team.team_id} value={team.team_id}>
                           {team.team_name}
                         </SelectItem>
                       ))}
@@ -335,66 +331,74 @@ export default function Users() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user: any) => (
-                <TableRow key={user._id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {getInitials(user.fullName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{user.fullName || "N/A"}</p>
-                        <p className="text-sm text-muted-foreground">{user.username}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        user.role === "admin"
-                          ? "bg-purple-100 text-purple-800 border-purple-200"
-                          : user.role === "collector"
-                          ? "bg-blue-100 text-blue-800 border-blue-200"
-                          : "bg-gray-100 text-gray-800 border-gray-200"
-                      }
-                    >
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Award className="h-4 w-4 text-warning" />
-                      <span className="font-medium">{(user.totalPoints || 0).toLocaleString()}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.totalReports || 0}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditUser(user)}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDelete(user._id, user.fullName)}
-                        disabled={deleteUserMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    No users found
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredUsers.map((user: any) => (
+                  <TableRow key={user.user_id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {getInitials(user.user_fullName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{user.user_fullName || "N/A"}</p>
+                          <p className="text-sm text-muted-foreground">{user.user_username}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{user.user_email}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          user.user_role === "admin"
+                            ? "bg-purple-100 text-purple-800 border-purple-200"
+                            : user.user_role === "collector"
+                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            : "bg-gray-100 text-gray-800 border-gray-200"
+                        }
+                      >
+                        {user.user_role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Award className="h-4 w-4 text-warning" />
+                        <span className="font-medium">{(user.totalPoints || 0).toLocaleString()}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{user.totalReports || 0}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditUser(user)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDelete(user.user_id, user.user_fullName)}
+                          disabled={deleteUserMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -454,24 +458,28 @@ export default function Users() {
               />
             </div>
 
-            {selectedUser?.role === "collector" && (
+            {selectedUser?.user_role === "collector" && (
               <div className="grid gap-3">
                 <Label>Assigned Teams</Label>
                 <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
-                  {teams?.map((team: any) => (
-                    <div key={team._id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`team-${team._id}`}
-                        checked={updateAssignedTeams.includes(team._id)}
-                        onChange={() => toggleTeamSelection(team._id)}
-                        className="h-4 w-4"
-                      />
-                      <label htmlFor={`team-${team._id}`} className="text-sm cursor-pointer">
-                        {team.team_name}
-                      </label>
-                    </div>
-                  ))}
+                  {teams && teams.length > 0 ? (
+                    teams.map((team: any) => (
+                      <div key={team.team_id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`team-${team.team_id}`}
+                          checked={updateAssignedTeams.includes(team.team_id)}
+                          onChange={() => toggleTeamSelection(team.team_id)}
+                          className="h-4 w-4"
+                        />
+                        <label htmlFor={`team-${team.team_id}`} className="text-sm cursor-pointer">
+                          {team.team_name}
+                        </label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No teams available</p>
+                  )}
                 </div>
               </div>
             )}

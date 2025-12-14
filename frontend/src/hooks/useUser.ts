@@ -2,6 +2,31 @@ import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
+interface Team {
+  team_id: string;
+  team_name: string;
+  team_specialization: string;
+  team_status: string;
+}
+
+interface User {
+  user_id: string;
+  user_email: string;
+  user_username: string;
+  user_firstName: string | null;
+  user_lastName: string | null;
+  user_fullName: string | null;
+  user_phoneNumber: string | null;
+  user_profileImage: string | null;
+  user_role: string;
+  user_points: number;
+  user_createdAt: string;
+  user_updatedAt: string;
+  user_assignedTeams: Team[];
+  totalReports: number;
+  totalPoints: number;
+}
+
 // Get all users
 export function useUsers() {
   return useQuery({
@@ -16,7 +41,7 @@ export function useUsers() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as User[];
     },
   });
 }
@@ -35,7 +60,7 @@ export function useUser(id: string) {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as User;
     },
     enabled: !!id,
   });
@@ -67,7 +92,7 @@ export function useCreateCollector() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as User;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -110,11 +135,11 @@ export function useUpdateUser() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as User;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      queryClient.invalidateQueries({ queryKey: ["user", data._id] });
+      queryClient.invalidateQueries({ queryKey: ["user", data.user_id] });
       toast.success("User updated successfully!");
     },
     onError: (error: Error) => {
@@ -129,7 +154,7 @@ export function useDeleteUser() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`${API_URL}/users/${id}`, {
+      const response = await fetch(`${API_URL}/user/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
