@@ -1,9 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { isAuthenticated } from "../middleware/auth.middleware.js";
-import { Redemption } from "../models/Redemption.model.js";
-import { User } from "../models/user.model.js";
-import { wasteAnalysis } from "../models/wasteAnalysis.model.js";
+import { prisma } from "../config/prisma.config.js";
 
 const router = Router();
 
@@ -12,7 +10,7 @@ router.get(
   "/stats",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const userId = req.user._id;
+    const userId = req.user.user_id;
 
     const now = new Date();
     const lastMonthDate = new Date(
@@ -26,26 +24,40 @@ router.get(
       totalReports,
       lastMonthReports,
       recentReports,
-      totalRedemptions
+      totalRedemptions,
     ] = await Promise.all([
-      User.findById(userId).select("points"),
-
-      wasteAnalysis.countDocuments({ waste_analysedBy: userId }),
-
-      wasteAnalysis.countDocuments({
-        waste_analysedBy: userId,
-        waste_createdAt: { $gte: lastMonthDate },
+      prisma.user.findUnique({
+        where: { user_id: userId },
+        select: { user_points: true },
       }),
 
-      wasteAnalysis
-        .find({ waste_analysedBy: userId })
-        .sort({ waste_createdAt: -1 })
-        .limit(3)
-        .select(
-          "waste_createdAt waste_status waste_location waste_dominantWasteType"
-        ),
+      prisma.wasteAnalysis.count({
+        where: { waste_analysedBy: userId },
+      }),
 
-      Redemption.countDocuments({ redemption_user: userId }),
+      prisma.wasteAnalysis.count({
+        where: {
+          waste_analysedBy: userId,
+          waste_createdAt: { gte: lastMonthDate },
+        },
+      }),
+
+      prisma.wasteAnalysis.findMany({
+        where: { waste_analysedBy: userId },
+        orderBy: { waste_createdAt: "desc" },
+        take: 3,
+        select: {
+          waste_id: true,
+          waste_createdAt: true,
+          waste_status: true,
+          waste_locationAddress: true,
+          waste_dominantWasteType: true,
+        },
+      }),
+
+      prisma.order.count({
+        where: { order_userId: userId },
+      }),
     ]);
 
     if (!user) {
@@ -62,16 +74,18 @@ router.get(
       now.getDate()
     );
 
-    const previousMonthReports = await wasteAnalysis.countDocuments({
-      waste_analysedBy: userId,
-      waste_createdAt: { $gte: twoMonthsAgo, $lt: lastMonthDate },
+    const previousMonthReports = await prisma.wasteAnalysis.count({
+      where: {
+        waste_analysedBy: userId,
+        waste_createdAt: { gte: twoMonthsAgo, lt: lastMonthDate },
+      },
     });
 
     const reportDifference = lastMonthReports - previousMonthReports;
 
     // Points until next reward
-    const nextRewardThreshold = Math.ceil(user.points / 500) * 500;
-    const pointsUntilNextReward = nextRewardThreshold - user.points;
+    const nextRewardThreshold = Math.ceil(user.user_points / 500) * 500;
+    const pointsUntilNextReward = nextRewardThreshold - user.user_points;
 
     // Level system
     const getUserLevel = (points) => {
@@ -82,10 +96,10 @@ router.get(
       return { name: "Eco Legend", level: 5 };
     };
 
-    const currentLevel = getUserLevel(user.points);
+    const currentLevel = getUserLevel(user.user_points);
     const nextLevelPoints =
       currentLevel.level === 5
-        ? user.points
+        ? user.user_points
         : [200, 500, 1000, 2000][currentLevel.level];
     const previousLevelPoints =
       currentLevel.level === 1
@@ -95,13 +109,13 @@ router.get(
     const levelProgress =
       currentLevel.level === 5
         ? 100
-        : ((user.points - previousLevelPoints) /
+        : ((user.user_points - previousLevelPoints) /
             (nextLevelPoints - previousLevelPoints)) *
           100;
 
     // Recent reports formatting
     const formattedRecentReports = recentReports.map((report) => ({
-      id: report._id,
+      id: report.waste_id,
       date: report.waste_createdAt.toISOString().split("T")[0],
       status:
         report.waste_status === "collected"
@@ -109,12 +123,11 @@ router.get(
           : report.waste_status === "dispatched"
           ? "In Progress"
           : "Pending",
-      location:
-        report.waste_location?.waste_address || "Location not specified",
+      location: report.waste_locationAddress || "Location not specified",
       wasteType: report.waste_dominantWasteType || "Mixed waste",
     }));
 
-    // Final dashboard 
+    // Final dashboard
     const dashboardData = {
       stats: {
         totalReports: {
@@ -124,13 +137,13 @@ router.get(
           }${reportDifference} from last month`,
         },
         ecoPoints: {
-          value: user.points,
+          value: user.user_points,
           subtitle: `${pointsUntilNextReward} points until next reward`,
         },
         itemsRedeemed: {
           value: totalRedemptions,
           subtitle: "Redeemed rewards",
-        }
+        },
       },
       recentReports: formattedRecentReports,
       levelProgress: {
@@ -142,7 +155,7 @@ router.get(
             : getUserLevel(nextLevelPoints).name,
         progress: Math.round(levelProgress),
         pointsToNextLevel:
-          currentLevel.level === 5 ? 0 : nextLevelPoints - user.points,
+          currentLevel.level === 5 ? 0 : nextLevelPoints - user.user_points,
       },
     };
 
