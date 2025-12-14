@@ -182,11 +182,25 @@ router.post(
             truck_status: "available",
           },
         },
+        team_dispatches: {
+          where: {
+            dispatch_status: {
+              in: ["assigned", "en_route"],
+            },
+          },
+          orderBy: {
+            dispatch_estimatedArrival: "asc",
+          },
+          take: 1,
+          include: {
+            dispatch_assignedTruck: true,
+          },
+        },
       },
     });
 
     // Fallback to general team if no specialized team found
-    if (!team || team.team_trucks.length === 0) {
+    if (!team) {
       team = await prisma.team.findFirst({
         where: {
           team_specialization: "general",
@@ -196,6 +210,20 @@ router.post(
           team_trucks: {
             where: {
               truck_status: "available",
+            },
+          },
+          team_dispatches: {
+            where: {
+              dispatch_status: {
+                in: ["assigned", "en_route"],
+              },
+            },
+            orderBy: {
+              dispatch_estimatedArrival: "asc",
+            },
+            take: 1,
+            include: {
+              dispatch_assignedTruck: true,
             },
           },
         },
@@ -209,19 +237,52 @@ router.post(
       });
     }
 
-    // Find available truck from team
-    const availableTruck = team.team_trucks[0];
+    let availableTruck = null;
+    let scheduledDate = new Date();
+    let isQueued = false;
+    let queueInfo = null;
+
+    // Check if there's an available truck
+    if (team.team_trucks.length > 0) {
+      // Use immediately available truck
+      availableTruck = team.team_trucks[0];
+      scheduledDate.setHours(scheduledDate.getHours() + 24);
+    } else {
+      // No available trucks - queue behind the earliest finishing dispatch
+      const nextAvailableDispatch = team.team_dispatches[0];
+
+      if (!nextAvailableDispatch) {
+        // Team exists but has no trucks at all
+        return res.status(404).json({
+          success: false,
+          message: `Team "${team.team_name}" has no trucks assigned`,
+        });
+      }
+
+      // Use the truck from the earliest finishing dispatch
+      availableTruck = nextAvailableDispatch.dispatch_assignedTruck;
+      
+      // Schedule after the current dispatch's estimated arrival + 2 hours buffer
+      scheduledDate = new Date(nextAvailableDispatch.dispatch_estimatedArrival);
+      scheduledDate.setHours(scheduledDate.getHours() + 2);
+      
+      isQueued = true;
+      queueInfo = {
+        waitingForDispatch: nextAvailableDispatch.dispatch_id,
+        currentDispatchETA: nextAvailableDispatch.dispatch_estimatedArrival,
+        truckAvailableAfter: scheduledDate,
+        estimatedWaitTime: Math.ceil(
+          (scheduledDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)
+        ), // hours
+      };
+    }
 
     if (!availableTruck) {
       return res.status(404).json({
         success: false,
-        message: "No available trucks found for this team",
+        message: "No trucks found for this team",
       });
     }
-
-    // Calculate scheduled date (24-48 hours from now)
-    const scheduledDate = new Date();
-    scheduledDate.setHours(scheduledDate.getHours() + 24);
 
     const estimatedArrival = new Date(scheduledDate);
     estimatedArrival.setHours(estimatedArrival.getHours() + 2);
@@ -253,11 +314,14 @@ router.post(
       data: { waste_status: "dispatched" },
     });
 
-    // Update truck status
-    await prisma.truck.update({
-      where: { truck_id: availableTruck.truck_id },
-      data: { truck_status: "in_use" },
-    });
+    // Only mark truck as in_use if it's currently available
+    // If queued, truck stays in its current status
+    if (!isQueued) {
+      await prisma.truck.update({
+        where: { truck_id: availableTruck.truck_id },
+        data: { truck_status: "in_use" },
+      });
+    }
 
     // Notify user who reported the waste
     await prisma.notification.create({
@@ -266,14 +330,18 @@ router.post(
         notification_entityType: "dispatch",
         notification_entityId: dispatch.dispatch_id,
         notification_type: "dispatch_assigned",
-        notification_title: "Pickup Scheduled! 🚚",
-        notification_message: `Your waste report has been assigned to ${team.team_name}. Expected pickup: ${scheduledDate.toLocaleDateString()}`,
-        notification_priority: "high",
+        notification_title: isQueued ? "Pickup Queued 🕐" : "Pickup Scheduled! 🚚",
+        notification_message: isQueued
+          ? `Your waste report has been queued with ${team.team_name}. Expected pickup: ${scheduledDate.toLocaleDateString()} (after current collection completes)`
+          : `Your waste report has been assigned to ${team.team_name}. Expected pickup: ${scheduledDate.toLocaleDateString()}`,
+        notification_priority: isQueued ? "normal" : "high",
         notification_metadata: {
           dispatchId: dispatch.dispatch_id,
           teamName: team.team_name,
           truckRegistration: availableTruck.truck_registrationNumber,
           scheduledDate: scheduledDate.toISOString(),
+          isQueued,
+          queueInfo,
         },
       },
     });
@@ -292,14 +360,20 @@ router.post(
           notification_entityType: "dispatch",
           notification_entityId: dispatch.dispatch_id,
           notification_type: "dispatch_assigned",
-          notification_title: "Dispatch Created (Auto)",
-          notification_message: `Automatic dispatch assigned to ${team.team_name} for ${requiredSpecialization} waste at ${waste.waste_locationAddress}`,
+          notification_title: isQueued
+            ? "Dispatch Queued (Auto)"
+            : "Dispatch Created (Auto)",
+          notification_message: isQueued
+            ? `Queued dispatch for ${team.team_name}: ${requiredSpecialization} waste at ${waste.waste_locationAddress}. Scheduled after current collection (${queueInfo.estimatedWaitTime}h wait)`
+            : `Automatic dispatch assigned to ${team.team_name} for ${requiredSpecialization} waste at ${waste.waste_locationAddress}`,
           notification_priority: "normal",
           notification_metadata: {
             dispatchId: dispatch.dispatch_id,
             wasteId: waste.waste_id,
             teamName: team.team_name,
             specialization: requiredSpecialization,
+            isQueued,
+            queueInfo,
           },
         },
       })
@@ -342,8 +416,14 @@ router.post(
 
     res.status(201).json({
       success: true,
-      message: "Dispatch created automatically",
+      message: isQueued
+        ? "Dispatch queued successfully - will be processed after current collection"
+        : "Dispatch created automatically",
       data: dispatch,
+      queueStatus: {
+        isQueued,
+        queueInfo,
+      },
       notifications: {
         user: 1,
         admins: admins.length,
@@ -560,6 +640,133 @@ router.post(
 );
 
 // ============================================
+// GET TEAM/TRUCK AVAILABILITY
+// ============================================
+router.get(
+  "/availability",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { specialization } = req.query;
+
+    // Get all teams with their trucks and active dispatches
+    const whereClause = specialization
+      ? { team_specialization: specialization, team_status: "active" }
+      : { team_status: "active" };
+
+    const teams = await prisma.team.findMany({
+      where: whereClause,
+      include: {
+        team_trucks: {
+          include: {
+            truck_dispatches: {
+              where: {
+                dispatch_status: {
+                  in: ["assigned", "en_route"],
+                },
+              },
+              orderBy: {
+                dispatch_estimatedArrival: "asc",
+              },
+              take: 1,
+            },
+          },
+        },
+        team_dispatches: {
+          where: {
+            dispatch_status: {
+              in: ["assigned", "en_route"],
+            },
+          },
+        },
+      },
+    });
+
+    const availability = teams.map((team) => {
+      const availableTrucks = team.team_trucks.filter(
+        (truck) => truck.truck_status === "available"
+      );
+
+      const busyTrucks = team.team_trucks.filter(
+        (truck) => truck.truck_status === "in_use"
+      );
+
+      // Find next available time across all busy trucks
+      let nextAvailableTime = null;
+      let nextAvailableTruck = null;
+
+      busyTrucks.forEach((truck) => {
+        if (truck.truck_dispatches.length > 0) {
+          const dispatch = truck.truck_dispatches[0];
+          const estimatedFree = new Date(dispatch.dispatch_estimatedArrival);
+          estimatedFree.setHours(estimatedFree.getHours() + 2); // Add buffer
+
+          if (
+            !nextAvailableTime ||
+            estimatedFree.getTime() < nextAvailableTime.getTime()
+          ) {
+            nextAvailableTime = estimatedFree;
+            nextAvailableTruck = {
+              truckId: truck.truck_id,
+              registration: truck.truck_registrationNumber,
+              currentDispatchId: dispatch.dispatch_id,
+              estimatedArrival: dispatch.dispatch_estimatedArrival,
+            };
+          }
+        }
+      });
+
+      return {
+        teamId: team.team_id,
+        teamName: team.team_name,
+        specialization: team.team_specialization,
+        status: team.team_status,
+        totalTrucks: team.team_trucks.length,
+        availableTrucks: availableTrucks.length,
+        busyTrucks: busyTrucks.length,
+        activeDispatches: team.team_dispatches.length,
+        immediatelyAvailable: availableTrucks.length > 0,
+        nextAvailableTime,
+        nextAvailableTruck,
+        estimatedWaitHours: nextAvailableTime
+          ? Math.ceil(
+              (nextAvailableTime.getTime() - new Date().getTime()) /
+                (1000 * 60 * 60)
+            )
+          : null,
+        availableTruckDetails: availableTrucks.map((t) => ({
+          truckId: t.truck_id,
+          registration: t.truck_registrationNumber,
+          type: t.truck_truckType,
+          capacity: t.truck_capacity,
+        })),
+      };
+    });
+
+    // Overall summary
+    const summary = {
+      totalTeams: teams.length,
+      teamsWithAvailableTrucks: availability.filter(
+        (a) => a.immediatelyAvailable
+      ).length,
+      teamsFullyBusy: availability.filter((a) => !a.immediatelyAvailable)
+        .length,
+      totalAvailableTrucks: availability.reduce(
+        (sum, a) => sum + a.availableTrucks,
+        0
+      ),
+      totalBusyTrucks: availability.reduce((sum, a) => sum + a.busyTrucks, 0),
+    };
+
+    res.json({
+      success: true,
+      summary,
+      teams: availability,
+    });
+  })
+);
+
+// ============================================
 // GET DISPATCHABLE WASTE REPORTS
 // ============================================
 // Returns only waste reports that can be dispatched
@@ -614,6 +821,112 @@ router.get(
       totalPages: Math.ceil(total / parseInt(limit)),
       results: wasteReports.length,
       data: wasteReports,
+    });
+  })
+);
+
+// ============================================
+// GET DISPATCH QUEUE
+// ============================================
+router.get(
+  "/queue",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { teamId } = req.query;
+
+    const whereClause = {
+      dispatch_status: "pending",
+    };
+
+    if (teamId) {
+      whereClause.dispatch_assignedTeamId = teamId;
+    }
+
+    const queuedDispatches = await prisma.dispatch.findMany({
+      where: whereClause,
+      include: {
+        dispatch_wasteAnalysis: {
+          include: {
+            waste_wasteCategories: true,
+            waste_user: {
+              select: {
+                user_id: true,
+                user_fullName: true,
+                user_email: true,
+              },
+            },
+          },
+        },
+        dispatch_assignedTeam: {
+          select: {
+            team_id: true,
+            team_name: true,
+            team_specialization: true,
+          },
+        },
+        dispatch_assignedTruck: {
+          select: {
+            truck_id: true,
+            truck_registrationNumber: true,
+            truck_status: true,
+          },
+        },
+      },
+      orderBy: {
+        dispatch_scheduledDate: "asc",
+      },
+    });
+
+    // Calculate position in queue and estimated activation time
+    const enrichedQueue = await Promise.all(
+      queuedDispatches.map(async (dispatch, index) => {
+        // Find current active dispatch using the same truck
+        const activeDispatch = await prisma.dispatch.findFirst({
+          where: {
+            dispatch_assignedTruckId: dispatch.dispatch_assignedTruckId,
+            dispatch_status: {
+              in: ["assigned", "en_route"],
+            },
+          },
+          orderBy: {
+            dispatch_estimatedArrival: "asc",
+          },
+        });
+
+        let estimatedActivation = null;
+        let blockedBy = null;
+
+        if (activeDispatch) {
+          estimatedActivation = new Date(
+            activeDispatch.dispatch_estimatedArrival
+          );
+          estimatedActivation.setHours(estimatedActivation.getHours() + 2);
+          blockedBy = {
+            dispatchId: activeDispatch.dispatch_id,
+            estimatedCompletion: activeDispatch.dispatch_estimatedArrival,
+          };
+        }
+
+        return {
+          ...dispatch,
+          queuePosition: index + 1,
+          estimatedActivation,
+          blockedBy,
+          waitTimeHours: estimatedActivation
+            ? Math.ceil(
+                (estimatedActivation.getTime() - new Date().getTime()) /
+                  (1000 * 60 * 60)
+              )
+            : null,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      total: queuedDispatches.length,
+      data: enrichedQueue,
     });
   })
 );
