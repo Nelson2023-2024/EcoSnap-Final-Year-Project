@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type TruckType = "general" | "recyclables" | "e-waste" | "organic" | "hazardous";
+type TruckType = "general" | "recyclables" | "e_waste" | "organic" | "hazardous";
 type TruckStatus = "available" | "in_use" | "maintenance";
 
 export default function Trucks() {
@@ -147,7 +147,7 @@ export default function Trucks() {
     setUpdateTruckType(truck.truck_truckType as TruckType);
     setUpdateCapacity(truck.truck_capacity.toString());
     setUpdateStatus(truck.truck_status);
-    setUpdateAssignedTeam(truck.truck_assignedTeam?._id || "none");
+    setUpdateAssignedTeam(truck.truck_assignedTeamId || "none");
     setUpdateDialogOpen(true);
   };
 
@@ -161,7 +161,7 @@ export default function Trucks() {
 
     try {
       await updateTruckMutation.mutateAsync({
-        id: selectedTruck._id,
+        id: selectedTruck.truck_id,
         registrationNumber: updateRegistrationNumber,
         truckType: updateTruckType,
         capacity: Number(updateCapacity),
@@ -192,7 +192,7 @@ export default function Trucks() {
     switch (type) {
       case "recyclables":
         return "bg-accent/20 text-accent-foreground";
-      case "e-waste":
+      case "e_waste":
         return "bg-yellow-200 text-yellow-900";
       case "organic":
         return "bg-green-200 text-green-900";
@@ -203,6 +203,14 @@ export default function Trucks() {
       default:
         return "bg-muted text-muted-foreground";
     }
+  };
+
+  const formatType = (type: string) => {
+    return type.replace(/_/g, "-").replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const formatStatus = (status: string) => {
+    return status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
   };
 
   if (isLoading) {
@@ -289,7 +297,7 @@ export default function Trucks() {
                 <SelectLabel>Type</SelectLabel>
                 <SelectItem value="general">General</SelectItem>
                 <SelectItem value="recyclables">Recyclables</SelectItem>
-                <SelectItem value="e-waste">E-Waste</SelectItem>
+                <SelectItem value="e_waste">E-Waste</SelectItem>
                 <SelectItem value="organic">Organic</SelectItem>
                 <SelectItem value="hazardous">Hazardous</SelectItem>
               </SelectGroup>
@@ -320,7 +328,7 @@ export default function Trucks() {
               <SelectLabel>Teams</SelectLabel>
               <SelectItem value="none">None</SelectItem>
               {teams?.map((team: any) => (
-                <SelectItem key={team._id} value={team._id}>
+                <SelectItem key={team.team_id} value={team.team_id}>
                   {team.team_name}
                 </SelectItem>
               ))}
@@ -366,7 +374,7 @@ export default function Trucks() {
             </DialogContent>
           </Dialog>
         </div>
-        <p className="text-center py-10">No trucks available. Add your first truck!</p>
+        <p className="text-center py-10 text-muted-foreground">No trucks available. Add your first truck!</p>
       </div>
     );
   }
@@ -401,7 +409,7 @@ export default function Trucks() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {trucks.map((truck: any) => (
-          <Card key={truck._id} className="hover:shadow-lg transition-shadow overflow-hidden">
+          <Card key={truck.truck_id} className="hover:shadow-lg transition-shadow overflow-hidden">
             {truck.truck_imageURL && (
               <div className="relative w-full h-48">
                 <Image
@@ -431,7 +439,7 @@ export default function Trucks() {
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() =>
-                    handleDelete(truck._id, truck.truck_registrationNumber)
+                    handleDelete(truck.truck_id, truck.truck_registrationNumber)
                   }
                   disabled={deleteTruckMutation.isPending}
                 >
@@ -447,10 +455,10 @@ export default function Trucks() {
                     truck.truck_truckType
                   )}`}
                 >
-                  {truck.truck_truckType}
+                  {formatType(truck.truck_truckType)}
                 </span>
                 <Badge variant={getStatusColor(truck.truck_status)}>
-                  {truck.truck_status.replace("_", " ")}
+                  {formatStatus(truck.truck_status)}
                 </Badge>
               </div>
 
@@ -518,7 +526,7 @@ export default function Trucks() {
                       <SelectLabel>Type</SelectLabel>
                       <SelectItem value="general">General</SelectItem>
                       <SelectItem value="recyclables">Recyclables</SelectItem>
-                      <SelectItem value="e-waste">E-Waste</SelectItem>
+                      <SelectItem value="e_waste">E-Waste</SelectItem>
                       <SelectItem value="organic">Organic</SelectItem>
                       <SelectItem value="hazardous">Hazardous</SelectItem>
                     </SelectGroup>
@@ -569,7 +577,7 @@ export default function Trucks() {
                     <SelectLabel>Teams</SelectLabel>
                     <SelectItem value="none">None</SelectItem>
                     {teams?.map((team: any) => (
-                      <SelectItem key={team._id} value={team._id}>
+                      <SelectItem key={team.team_id} value={team.team_id}>
                         {team.team_name}
                       </SelectItem>
                     ))}

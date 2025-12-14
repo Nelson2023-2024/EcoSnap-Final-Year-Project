@@ -2,6 +2,28 @@ import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
+interface AssignedTeam {
+  team_id: string;
+  team_name: string;
+  team_status: string;
+  team_specialization: string;
+}
+
+interface Truck {
+  truck_id: string;
+  truck_registrationNumber: string;
+  truck_imageURL: string | null;
+  truck_truckType: string;
+  truck_capacity: number;
+  truck_status: string;
+  truck_assignedTeamId: string | null;
+  truck_locationLongitude: number;
+  truck_locationLatitude: number;
+  truck_createdAt: string;
+  truck_updatedAt: string;
+  truck_assignedTeam: AssignedTeam | null;
+}
+
 // Get all trucks
 export function useTrucks() {
   return useQuery({
@@ -16,7 +38,7 @@ export function useTrucks() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck[];
     },
   });
 }
@@ -35,7 +57,7 @@ export function useTruck(id: string) {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck;
     },
     enabled: !!id,
   });
@@ -74,7 +96,7 @@ export function useCreateTruck() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
@@ -118,11 +140,11 @@ export function useUpdateTruck() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
-      queryClient.invalidateQueries({ queryKey: ["truck", data._id] });
+      queryClient.invalidateQueries({ queryKey: ["truck", data.truck_id] });
       toast.success("Truck updated successfully!");
     },
     onError: (error: Error) => {
