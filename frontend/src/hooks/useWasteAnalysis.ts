@@ -7,40 +7,34 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
-// Types
+// Types matching Prisma schema
 interface WasteCategory {
-  type: string;
-  estimatedPercentage: number;
+  id: string;
+  waste_type: string;
+  waste_estimatedPercentage: number;
+  wasteAnalysisId: string;
 }
 
 interface WasteAnalysisItem {
-  _id: string;
-  analysedBy: string;
-  imageURL: string;
-  containsWaste: boolean;
-  wasteCategories: WasteCategory[];
-  dominantWasteType: string | null;
-  estimatedVolume: {
-    value: number;
-    unit: "kg" | "liters" | "cubic_meters";
-  };
-  possibleSource: string;
-  environmentalImpact: string;
-  confidenceLevel: string;
-  status:
-    | "pending_dispatch"
-    | "dispatched"
-    | "collected"
-    | "no_waste"
-    | "error";
-  errorMessage: string | null;
-  location: {
-    type: "Point";
-    coordinates: [number, number];
-    address: string;
-  };
-  createdAt: string;
-  updatedAt: string;
+  waste_id: string;
+  waste_analysedBy: string;
+  waste_imageURL: string;
+  waste_containsWaste: boolean;
+  waste_overallCategory: "general" | "recyclables" | "e_waste" | "organic" | "hazardous" | null;
+  waste_dominantWasteType: string | null;
+  waste_estimatedVolumeValue: number | null;
+  waste_estimatedVolumeUnit: "kg" | "liters" | "cubic_meters" | null;
+  waste_possibleSource: string | null;
+  waste_environmentalImpact: string | null;
+  waste_confidenceLevel: string | null;
+  waste_status: "pending_dispatch" | "dispatched" | "collected" | "no_waste" | "error";
+  waste_errorMessage: string | null;
+  waste_locationLongitude: number;
+  waste_locationLatitude: number;
+  waste_locationAddress: string | null;
+  waste_createdAt: string;
+  waste_updatedAt: string;
+  waste_wasteCategories: WasteCategory[];
 }
 
 interface WasteAnalysisResponse {
@@ -108,10 +102,9 @@ export function useAnalyzeWaste() {
       return data;
     },
     onSuccess: (data) => {
-      // Method 1: Invalidate with refetchType to ensure active queries refetch
       queryClient.invalidateQueries({
         queryKey: ["wasteAnalysis", "history"],
-        refetchType: "active", // This ensures active queries are refetched immediately
+        refetchType: "active",
       });
 
       queryClient.invalidateQueries({ queryKey: ["authUser"] });
@@ -155,14 +148,14 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
         ? lastPage.page + 1
         : undefined;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
 export function useWasteAnalysis(id: string | undefined) {
   return useQuery<WasteAnalysisItem, Error>({
     queryKey: ["wasteAnalysis", id],
-    enabled: !!id, // Prevents running before id exists
+    enabled: !!id,
 
     queryFn: async () => {
       const res = await fetch(`${API_URL}/waste-analysis/${id}`, {
@@ -178,7 +171,7 @@ export function useWasteAnalysis(id: string | undefined) {
       return json.data;
     },
 
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
@@ -208,6 +201,6 @@ export function useAdminWasteReportsInfinite(limit = 10) {
         : undefined;
     },
 
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
