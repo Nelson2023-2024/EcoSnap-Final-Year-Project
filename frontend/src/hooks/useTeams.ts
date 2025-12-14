@@ -7,7 +7,7 @@ interface CreateTeamParams {
   specialization:
     | "general"
     | "recyclables"
-    | "e-waste"
+    | "e_waste"
     | "organic"
     | "hazardous";
 }
@@ -18,19 +18,48 @@ interface UpdateTeamParams {
   specialization?:
     | "general"
     | "recyclables"
-    | "e-waste"
+    | "e_waste"
     | "organic"
     | "hazardous";
-  status?: "active" | "inactive";
+  status?: "active" | "off_duty";
+}
+
+interface TeamMember {
+  id: string;
+  userId: string;
+  teamId: string;
+  user: {
+    user_id: string;
+    user_fullName: string;
+    user_email: string;
+    user_role: string;
+    user_phoneNumber: string;
+    user_profileImage?: string;
+  };
+}
+
+interface Truck {
+  truck_id: string;
+  truck_registrationNumber: string;
+  truck_truckType: string;
+  truck_status: string;
+  truck_capacity: number;
+  truck_imageURL?: string;
 }
 
 interface Team {
-  _id: string;
+  team_id: string;
   team_name: string;
   team_specialization: string;
   team_status: string;
-  team_members?: any[];
-  team_trucks?: any[];
+  team_createdAt: string;
+  team_updatedAt: string;
+  team_members?: TeamMember[];
+  team_trucks?: Truck[];
+  _count?: {
+    team_dispatches: number;
+    team_members?: number;
+  };
 }
 
 // CREATE TEAM
@@ -56,7 +85,7 @@ export function useCreateTeam() {
       const json = await res.json();
       return json.data as Team;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Team created successfully!");
       queryClient.invalidateQueries({ queryKey: ["teams"] });
     },
@@ -101,7 +130,7 @@ export function useTeam(id: string) {
       const data = await response.json();
       return data.data as Team;
     },
-    enabled: !!id, // Only run if id is provided
+    enabled: !!id,
   });
 }
 
@@ -131,7 +160,7 @@ export function useUpdateTeam() {
     onSuccess: (data) => {
       toast.success("Team updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      queryClient.invalidateQueries({ queryKey: ["teams", data._id] });
+      queryClient.invalidateQueries({ queryKey: ["teams", data.team_id] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update team");
