@@ -1,84 +1,205 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
-import { Dispatch } from "../models/Dispatch.model.js";
-import { wasteAnalysis } from "../models/wasteAnalysis.model.js";
-import { Team } from "../models/Team.model.js";
-import { Truck } from "../models/Truck.model.js";
-import { User } from "../models/User.model.js";
-import { Notification } from "../models/Notification.model.js";
-import mongoose from "mongoose";
+import { prisma } from "../config/prisma.config.js";
+import upload from "../middleware/upload.middleware.js";
+import { uploadToCloudinary } from "../lib/upload.cloudinary.js";
 
 const router = Router();
 
 // ============================================
+// HELPER: Validate if waste can be dispatched
+// ============================================
+async function validateWasteForDispatch(wasteId) {
+  const waste = await prisma.wasteAnalysis.findUnique({
+    where: { waste_id: wasteId },
+    include: {
+      waste_wasteCategories: true,
+    },
+  });
+
+  if (!waste) {
+    return {
+      valid: false,
+      error: "Waste analysis not found",
+      statusCode: 404,
+    };
+  }
+
+  // Check if waste report contains actual waste
+  if (!waste.waste_containsWaste) {
+    return {
+      valid: false,
+      error: "Cannot dispatch: This report indicates no waste was detected",
+      statusCode: 400,
+      details: "The AI analysis determined there is no waste in this image",
+    };
+  }
+
+  // Check for error status
+  if (waste.waste_status === "error") {
+    return {
+      valid: false,
+      error: "Cannot dispatch: Waste analysis failed with errors",
+      statusCode: 400,
+      details: waste.waste_errorMessage || "Unknown error occurred during analysis",
+    };
+  }
+
+  // Check for no_waste status
+  if (waste.waste_status === "no_waste") {
+    return {
+      valid: false,
+      error: "Cannot dispatch: No waste detected at this location",
+      statusCode: 400,
+    };
+  }
+
+  // Check if already dispatched
+  if (waste.waste_status !== "pending_dispatch") {
+    return {
+      valid: false,
+      error: `Cannot dispatch: Waste is already ${waste.waste_status}`,
+      statusCode: 400,
+    };
+  }
+
+  // Check if dispatch already exists
+  const existingDispatch = await prisma.dispatch.findUnique({
+    where: { dispatch_wasteAnalysisId: wasteId },
+  });
+
+  if (existingDispatch) {
+    return {
+      valid: false,
+      error: "Dispatch already exists for this waste report",
+      statusCode: 400,
+      dispatchId: existingDispatch.dispatch_id,
+    };
+  }
+
+  return {
+    valid: true,
+    waste,
+  };
+}
+
+// ============================================
+// CHECK IF WASTE CAN BE DISPATCHED
+// ============================================
+router.get(
+  "/can-dispatch/:wasteAnalysisId",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { wasteAnalysisId } = req.params;
+
+    const validation = await validateWasteForDispatch(wasteAnalysisId);
+
+    if (!validation.valid) {
+      return res.status(validation.statusCode).json({
+        success: false,
+        canDispatch: false,
+        message: validation.error,
+        details: validation.details,
+        dispatchId: validation.dispatchId,
+      });
+    }
+
+    res.json({
+      success: true,
+      canDispatch: true,
+      message: "Waste report is ready for dispatch",
+      data: {
+        wasteId: validation.waste.waste_id,
+        containsWaste: validation.waste.waste_containsWaste,
+        status: validation.waste.waste_status,
+        dominantType: validation.waste.waste_dominantWasteType,
+        categories: validation.waste.waste_wasteCategories,
+      },
+    });
+  })
+);
+
+// ============================================
 // AUTOMATIC DISPATCH
 // ============================================
-// Automatically assigns best available team/truck based on:
-// - Waste type (matches team specialization)
-// - Team availability (status: active)
-// - Truck availability (status: available)
 router.post(
   "/auto/:wasteAnalysisId",
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
     const { wasteAnalysisId } = req.params;
+    const adminUserId = req.user.user_id;
 
-    // Validate waste analysis exists
-    const waste = await wasteAnalysis.findById(wasteAnalysisId);
-    if (!waste) {
-      return res.status(404).json({
+    // Validate if waste can be dispatched
+    const validation = await validateWasteForDispatch(wasteAnalysisId);
+    if (!validation.valid) {
+      return res.status(validation.statusCode).json({
         success: false,
-        message: "Waste analysis not found",
+        message: validation.error,
+        details: validation.details,
+        dispatchId: validation.dispatchId,
       });
     }
 
-    // Check if already dispatched
-    if (waste.waste_status !== "pending_dispatch") {
-      return res.status(400).json({
-        success: false,
-        message: `Waste already ${waste.waste_status}`,
-      });
-    }
+    const waste = validation.waste;
 
     // Determine waste specialization
     const wasteTypeMapping = {
-      "PET plastic": "recyclables",
-      "HDPE plastic": "recyclables",
-      "Glass": "recyclables",
-      "E-waste": "e-waste",
-      "Battery": "e-waste",
-      "Electronics": "e-waste",
-      "Organic": "organic",
-      "Food waste": "organic",
-      "Hazardous": "hazardous",
-      "Chemical": "hazardous",
+      "pet plastic": "recyclables",
+      "hdpe plastic": "recyclables",
+      "glass": "recyclables",
+      "e-waste": "e_waste",
+      "battery": "e_waste",
+      "electronics": "e_waste",
+      "organic": "organic",
+      "food waste": "organic",
+      "hazardous": "hazardous",
+      "chemical": "hazardous",
     };
 
     let requiredSpecialization = "general";
-    const dominantType = waste.waste_dominantWasteType || "";
+    const dominantType = (waste.waste_dominantWasteType || "").toLowerCase();
 
     // Match dominant waste type to specialization
     for (const [key, spec] of Object.entries(wasteTypeMapping)) {
-      if (dominantType.toLowerCase().includes(key.toLowerCase())) {
+      if (dominantType.includes(key)) {
         requiredSpecialization = spec;
         break;
       }
     }
 
     // Find available team with matching specialization
-    let team = await Team.findOne({
-      team_specialization: requiredSpecialization,
-      team_status: "active",
-    }).populate("team_trucks");
+    let team = await prisma.team.findFirst({
+      where: {
+        team_specialization: requiredSpecialization,
+        team_status: "active",
+      },
+      include: {
+        team_trucks: {
+          where: {
+            truck_status: "available",
+          },
+        },
+      },
+    });
 
     // Fallback to general team if no specialized team found
-    if (!team) {
-      team = await Team.findOne({
-        team_specialization: "general",
-        team_status: "active",
-      }).populate("team_trucks");
+    if (!team || team.team_trucks.length === 0) {
+      team = await prisma.team.findFirst({
+        where: {
+          team_specialization: "general",
+          team_status: "active",
+        },
+        include: {
+          team_trucks: {
+            where: {
+              truck_status: "available",
+            },
+          },
+        },
+      });
     }
 
     if (!team) {
@@ -89,10 +210,7 @@ router.post(
     }
 
     // Find available truck from team
-    const availableTruck = await Truck.findOne({
-      _id: { $in: team.team_trucks },
-      truck_status: "available",
-    });
+    const availableTruck = team.team_trucks[0];
 
     if (!availableTruck) {
       return res.status(404).json({
@@ -109,58 +227,128 @@ router.post(
     estimatedArrival.setHours(estimatedArrival.getHours() + 2);
 
     // Create dispatch
-    const dispatch = await Dispatch.create({
-      dispatch_wasteAnalysis: waste._id,
-      dispatch_assignedTeam: team._id,
-      dispatch_assignedTruck: availableTruck._id,
-      dispatch_pickupLocation: {
-        type: "Point",
-        coordinates: waste.waste_location.waste_coordinates,
-        address: waste.waste_location.waste_address,
+    const dispatch = await prisma.dispatch.create({
+      data: {
+        dispatch_wasteAnalysisId: waste.waste_id,
+        dispatch_assignedTeamId: team.team_id,
+        dispatch_assignedTruckId: availableTruck.truck_id,
+        dispatch_locationLongitude: waste.waste_locationLongitude,
+        dispatch_locationLatitude: waste.waste_locationLatitude,
+        dispatch_locationAddress: waste.waste_locationAddress,
+        dispatch_status: "assigned",
+        dispatch_scheduledDate: scheduledDate,
+        dispatch_estimatedArrival: estimatedArrival,
+        dispatch_priority: "normal",
       },
-      dispatch_status: "assigned",
-      dispatch_scheduledDate: scheduledDate,
-      dispatch_estimatedArrival: estimatedArrival,
-      dispatch_priority: "normal",
+      include: {
+        dispatch_wasteAnalysis: true,
+        dispatch_assignedTeam: true,
+        dispatch_assignedTruck: true,
+      },
     });
 
     // Update waste status
-    waste.waste_status = "dispatched";
-    await waste.save();
-
-    // Update truck status
-    availableTruck.truck_status = "in_use";
-    await availableTruck.save();
-
-    // Notify user who reported the waste
-    await Notification.create({
-      user: waste.waste_analysedBy,
-      type: "dispatch_assigned",
-      title: "Pickup Scheduled! 🚚",
-      message: `Your waste report has been assigned. Expected pickup: ${scheduledDate.toLocaleDateString()}`,
-      relatedModel: "Dispatch",
-      relatedId: dispatch._id,
-      metadata: { dispatchId: dispatch._id },
+    await prisma.wasteAnalysis.update({
+      where: { waste_id: waste.waste_id },
+      data: { waste_status: "dispatched" },
     });
 
-    // Notify team members
-    const teamMembers = await User.find({ assignedTeams: team._id });
-    for (const member of teamMembers) {
-      await Notification.create({
-        user: member._id,
-        type: "dispatch_assigned",
-        title: "New Pickup Assignment 📋",
-        message: `New ${requiredSpecialization} waste pickup at ${waste.waste_location.waste_address}`,
-        relatedModel: "Dispatch",
-        relatedId: dispatch._id,
-        priority: "high",
-      });
-    }
+    // Update truck status
+    await prisma.truck.update({
+      where: { truck_id: availableTruck.truck_id },
+      data: { truck_status: "in_use" },
+    });
+
+    // Notify user who reported the waste
+    await prisma.notification.create({
+      data: {
+        notification_userId: waste.waste_analysedBy,
+        notification_entityType: "dispatch",
+        notification_entityId: dispatch.dispatch_id,
+        notification_type: "dispatch_assigned",
+        notification_title: "Pickup Scheduled! 🚚",
+        notification_message: `Your waste report has been assigned to ${team.team_name}. Expected pickup: ${scheduledDate.toLocaleDateString()}`,
+        notification_priority: "high",
+        notification_metadata: {
+          dispatchId: dispatch.dispatch_id,
+          teamName: team.team_name,
+          truckRegistration: availableTruck.truck_registrationNumber,
+          scheduledDate: scheduledDate.toISOString(),
+        },
+      },
+    });
+
+    // Get all admins
+    const admins = await prisma.user.findMany({
+      where: { user_role: "admin" },
+      select: { user_id: true },
+    });
+
+    // Notify all admins
+    const adminNotifications = admins.map((admin) =>
+      prisma.notification.create({
+        data: {
+          notification_userId: admin.user_id,
+          notification_entityType: "dispatch",
+          notification_entityId: dispatch.dispatch_id,
+          notification_type: "dispatch_assigned",
+          notification_title: "Dispatch Created (Auto)",
+          notification_message: `Automatic dispatch assigned to ${team.team_name} for ${requiredSpecialization} waste at ${waste.waste_locationAddress}`,
+          notification_priority: "normal",
+          notification_metadata: {
+            dispatchId: dispatch.dispatch_id,
+            wasteId: waste.waste_id,
+            teamName: team.team_name,
+            specialization: requiredSpecialization,
+          },
+        },
+      })
+    );
+
+    // Get team members and notify them
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { teamId: team.team_id },
+      include: {
+        user: {
+          select: {
+            user_id: true,
+            user_role: true,
+          },
+        },
+      },
+    });
+
+    const teamNotifications = teamMembers.map((member) =>
+      prisma.notification.create({
+        data: {
+          notification_userId: member.user.user_id,
+          notification_entityType: "dispatch",
+          notification_entityId: dispatch.dispatch_id,
+          notification_type: "dispatch_assigned",
+          notification_title: "New Pickup Assignment 📋",
+          notification_message: `New ${requiredSpecialization} waste pickup at ${waste.waste_locationAddress}`,
+          notification_priority: "high",
+          notification_metadata: {
+            dispatchId: dispatch.dispatch_id,
+            specialization: requiredSpecialization,
+            location: waste.waste_locationAddress,
+            scheduledDate: scheduledDate.toISOString(),
+          },
+        },
+      })
+    );
+
+    await Promise.all([...adminNotifications, ...teamNotifications]);
 
     res.status(201).json({
       success: true,
       message: "Dispatch created automatically",
       data: dispatch,
+      notifications: {
+        user: 1,
+        admins: admins.length,
+        teamMembers: teamMembers.length,
+      },
     });
   })
 );
@@ -168,7 +356,6 @@ router.post(
 // ============================================
 // MANUAL DISPATCH
 // ============================================
-// Admin manually assigns specific team and truck
 router.post(
   "/manual",
   isAuthenticated,
@@ -176,6 +363,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const { wasteAnalysisId, teamId, truckId, scheduledDate, priority } =
       req.body;
+    const adminUserId = req.user.user_id;
 
     // Validate required fields
     if (!wasteAnalysisId || !teamId || !truckId) {
@@ -185,24 +373,31 @@ router.post(
       });
     }
 
-    // Validate waste analysis
-    const waste = await wasteAnalysis.findById(wasteAnalysisId);
-    if (!waste) {
-      return res.status(404).json({
+    // Validate if waste can be dispatched
+    const validation = await validateWasteForDispatch(wasteAnalysisId);
+    if (!validation.valid) {
+      return res.status(validation.statusCode).json({
         success: false,
-        message: "Waste analysis not found",
+        message: validation.error,
+        details: validation.details,
+        dispatchId: validation.dispatchId,
       });
     }
 
-    if (waste.waste_status !== "pending_dispatch") {
-      return res.status(400).json({
-        success: false,
-        message: `Waste already ${waste.waste_status}`,
-      });
-    }
+    const waste = validation.waste;
 
     // Validate team
-    const team = await Team.findById(teamId);
+    const team = await prisma.team.findUnique({
+      where: { team_id: teamId },
+      include: {
+        team_trucks: {
+          select: {
+            truck_id: true,
+          },
+        },
+      },
+    });
+
     if (!team) {
       return res.status(404).json({
         success: false,
@@ -211,7 +406,10 @@ router.post(
     }
 
     // Validate truck
-    const truck = await Truck.findById(truckId);
+    const truck = await prisma.truck.findUnique({
+      where: { truck_id: truckId },
+    });
+
     if (!truck) {
       return res.status(404).json({
         success: false,
@@ -220,7 +418,11 @@ router.post(
     }
 
     // Check if truck belongs to team
-    if (!team.team_trucks.includes(truck._id)) {
+    const truckBelongsToTeam = team.team_trucks.some(
+      (t) => t.truck_id === truckId
+    );
+
+    if (!truckBelongsToTeam) {
       return res.status(400).json({
         success: false,
         message: "Truck does not belong to selected team",
@@ -236,58 +438,182 @@ router.post(
     estimatedArrival.setHours(estimatedArrival.getHours() + 2);
 
     // Create dispatch
-    const dispatch = await Dispatch.create({
-      dispatch_wasteAnalysis: waste._id,
-      dispatch_assignedTeam: team._id,
-      dispatch_assignedTruck: truck._id,
-      dispatch_pickupLocation: {
-        type: "Point",
-        coordinates: waste.waste_location.waste_coordinates,
-        address: waste.waste_location.waste_address,
+    const dispatch = await prisma.dispatch.create({
+      data: {
+        dispatch_wasteAnalysisId: waste.waste_id,
+        dispatch_assignedTeamId: team.team_id,
+        dispatch_assignedTruckId: truck.truck_id,
+        dispatch_locationLongitude: waste.waste_locationLongitude,
+        dispatch_locationLatitude: waste.waste_locationLatitude,
+        dispatch_locationAddress: waste.waste_locationAddress,
+        dispatch_status: "assigned",
+        dispatch_scheduledDate: pickupDate,
+        dispatch_estimatedArrival: estimatedArrival,
+        dispatch_priority: priority || "normal",
       },
-      dispatch_status: "assigned",
-      dispatch_scheduledDate: pickupDate,
-      dispatch_estimatedArrival: estimatedArrival,
-      dispatch_priority: priority || "normal",
+      include: {
+        dispatch_wasteAnalysis: true,
+        dispatch_assignedTeam: true,
+        dispatch_assignedTruck: true,
+      },
     });
 
     // Update waste status
-    waste.waste_status = "dispatched";
-    await waste.save();
-
-    // Update truck status
-    truck.truck_status = "in_use";
-    await truck.save();
-
-    // Notify user
-    await Notification.create({
-      user: waste.waste_analysedBy,
-      type: "dispatch_assigned",
-      title: "Pickup Scheduled! 🚚",
-      message: `Your waste report has been assigned. Expected pickup: ${pickupDate.toLocaleDateString()}`,
-      relatedModel: "Dispatch",
-      relatedId: dispatch._id,
-      metadata: { dispatchId: dispatch._id },
+    await prisma.wasteAnalysis.update({
+      where: { waste_id: waste.waste_id },
+      data: { waste_status: "dispatched" },
     });
 
-    // Notify team members
-    const teamMembers = await User.find({ assignedTeams: team._id });
-    for (const member of teamMembers) {
-      await Notification.create({
-        user: member._id,
-        type: "dispatch_assigned",
-        title: "New Pickup Assignment 📋",
-        message: `Manual assignment: Pickup at ${waste.waste_location.waste_address}`,
-        relatedModel: "Dispatch",
-        relatedId: dispatch._id,
-        priority: "high",
-      });
-    }
+    // Update truck status
+    await prisma.truck.update({
+      where: { truck_id: truck.truck_id },
+      data: { truck_status: "in_use" },
+    });
+
+    // Notify user who reported
+    await prisma.notification.create({
+      data: {
+        notification_userId: waste.waste_analysedBy,
+        notification_entityType: "dispatch",
+        notification_entityId: dispatch.dispatch_id,
+        notification_type: "dispatch_assigned",
+        notification_title: "Pickup Scheduled! 🚚",
+        notification_message: `Your waste report has been manually assigned to ${team.team_name}. Expected pickup: ${pickupDate.toLocaleDateString()}`,
+        notification_priority: "high",
+        notification_metadata: {
+          dispatchId: dispatch.dispatch_id,
+          teamName: team.team_name,
+          truckRegistration: truck.truck_registrationNumber,
+          scheduledDate: pickupDate.toISOString(),
+          manual: true,
+        },
+      },
+    });
+
+    // Get all admins
+    const admins = await prisma.user.findMany({
+      where: { user_role: "admin" },
+      select: { user_id: true },
+    });
+
+    // Notify admins (excluding the one who created it)
+    const adminNotifications = admins
+      .filter((admin) => admin.user_id !== adminUserId)
+      .map((admin) =>
+        prisma.notification.create({
+          data: {
+            notification_userId: admin.user_id,
+            notification_entityType: "dispatch",
+            notification_entityId: dispatch.dispatch_id,
+            notification_type: "dispatch_assigned",
+            notification_title: "Dispatch Created (Manual)",
+            notification_message: `Manual dispatch assigned to ${team.team_name} at ${waste.waste_locationAddress}`,
+            notification_priority: "normal",
+            notification_metadata: {
+              dispatchId: dispatch.dispatch_id,
+              wasteId: waste.waste_id,
+              teamName: team.team_name,
+              createdBy: adminUserId,
+            },
+          },
+        })
+      );
+
+    // Get team members and notify them
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { teamId: team.team_id },
+      select: { userId: true },
+    });
+
+    const teamNotifications = teamMembers.map((member) =>
+      prisma.notification.create({
+        data: {
+          notification_userId: member.userId,
+          notification_entityType: "dispatch",
+          notification_entityId: dispatch.dispatch_id,
+          notification_type: "dispatch_assigned",
+          notification_title: "New Pickup Assignment 📋",
+          notification_message: `Manual assignment: Pickup at ${waste.waste_locationAddress}`,
+          notification_priority: "high",
+          notification_metadata: {
+            dispatchId: dispatch.dispatch_id,
+            location: waste.waste_locationAddress,
+            scheduledDate: pickupDate.toISOString(),
+          },
+        },
+      })
+    );
+
+    await Promise.all([...adminNotifications, ...teamNotifications]);
 
     res.status(201).json({
       success: true,
       message: "Dispatch created manually",
       data: dispatch,
+      notifications: {
+        user: 1,
+        admins: adminNotifications.length,
+        teamMembers: teamMembers.length,
+      },
+    });
+  })
+);
+
+// ============================================
+// GET DISPATCHABLE WASTE REPORTS
+// ============================================
+// Returns only waste reports that can be dispatched
+router.get(
+  "/dispatchable-waste",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Find waste reports that:
+    // 1. Actually contain waste
+    // 2. Are pending dispatch
+    // 3. Don't have errors
+    // 4. Don't already have a dispatch assigned
+    const [wasteReports, total] = await Promise.all([
+      prisma.wasteAnalysis.findMany({
+        where: {
+          waste_containsWaste: true,
+          waste_status: "pending_dispatch",
+          waste_dispatch: null, // No dispatch exists yet
+        },
+        include: {
+          waste_wasteCategories: true,
+          waste_user: {
+            select: {
+              user_id: true,
+              user_fullName: true,
+              user_email: true,
+            },
+          },
+        },
+        orderBy: { waste_createdAt: "desc" },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.wasteAnalysis.count({
+        where: {
+          waste_containsWaste: true,
+          waste_status: "pending_dispatch",
+          waste_dispatch: null,
+        },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
+      results: wasteReports.length,
+      data: wasteReports,
     });
   })
 );
@@ -299,21 +625,60 @@ router.get(
   "/",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const { status, teamId, priority } = req.query;
+    const { status, teamId, priority, page = 1, limit = 10 } = req.query;
 
     const filter = {};
     if (status) filter.dispatch_status = status;
-    if (teamId) filter.dispatch_assignedTeam = teamId;
+    if (teamId) filter.dispatch_assignedTeamId = teamId;
     if (priority) filter.dispatch_priority = priority;
 
-    const dispatches = await Dispatch.find(filter)
-      .populate("dispatch_wasteAnalysis")
-      .populate("dispatch_assignedTeam", "team_name team_specialization")
-      .populate("dispatch_assignedTruck", "truck_registrationNumber")
-      .sort({ dispatch_createdAt: -1 });
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [dispatches, total] = await Promise.all([
+      prisma.dispatch.findMany({
+        where: filter,
+        include: {
+          dispatch_wasteAnalysis: {
+            include: {
+              waste_wasteCategories: true,
+              waste_user: {
+                select: {
+                  user_id: true,
+                  user_fullName: true,
+                  user_email: true,
+                },
+              },
+            },
+          },
+          dispatch_assignedTeam: {
+            select: {
+              team_id: true,
+              team_name: true,
+              team_specialization: true,
+            },
+          },
+          dispatch_assignedTruck: {
+            select: {
+              truck_id: true,
+              truck_registrationNumber: true,
+              truck_truckType: true,
+            },
+          },
+          dispatch_collectionImages: true,
+        },
+        orderBy: { dispatch_createdAt: "desc" },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.dispatch.count({ where: filter }),
+    ]);
 
     res.json({
       success: true,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      totalPages: Math.ceil(total / parseInt(limit)),
       results: dispatches.length,
       data: dispatches,
     });
@@ -327,10 +692,42 @@ router.get(
   "/:id",
   isAuthenticated,
   asyncHandler(async (req, res) => {
-    const dispatch = await Dispatch.findById(req.params.id)
-      .populate("dispatch_wasteAnalysis")
-      .populate("dispatch_assignedTeam")
-      .populate("dispatch_assignedTruck");
+    const dispatch = await prisma.dispatch.findUnique({
+      where: { dispatch_id: req.params.id },
+      include: {
+        dispatch_wasteAnalysis: {
+          include: {
+            waste_wasteCategories: true,
+            waste_user: {
+              select: {
+                user_id: true,
+                user_fullName: true,
+                user_email: true,
+                user_phoneNumber: true,
+              },
+            },
+          },
+        },
+        dispatch_assignedTeam: {
+          include: {
+            team_members: {
+              include: {
+                user: {
+                  select: {
+                    user_id: true,
+                    user_fullName: true,
+                    user_email: true,
+                    user_role: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        dispatch_assignedTruck: true,
+        dispatch_collectionImages: true,
+      },
+    });
 
     if (!dispatch) {
       return res.status(404).json({
@@ -354,6 +751,7 @@ router.patch(
   isAuthenticated,
   asyncHandler(async (req, res) => {
     const { status, collectionNotes } = req.body;
+    const userId = req.user.user_id;
 
     if (!status) {
       return res.status(400).json({
@@ -362,7 +760,19 @@ router.patch(
       });
     }
 
-    const dispatch = await Dispatch.findById(req.params.id);
+    const dispatch = await prisma.dispatch.findUnique({
+      where: { dispatch_id: req.params.id },
+      include: {
+        dispatch_wasteAnalysis: {
+          include: {
+            waste_user: true,
+          },
+        },
+        dispatch_assignedTeam: true,
+        dispatch_assignedTruck: true,
+      },
+    });
+
     if (!dispatch) {
       return res.status(404).json({
         success: false,
@@ -371,58 +781,176 @@ router.patch(
     }
 
     const oldStatus = dispatch.dispatch_status;
-    dispatch.dispatch_status = status;
+    const updateData = {
+      dispatch_status: status,
+    };
 
     if (collectionNotes) {
-      dispatch.dispatch_collectionNotes = collectionNotes;
+      updateData.dispatch_collectionNotes = collectionNotes;
     }
 
     // Handle completion
     if (status === "collected" || status === "completed") {
-      dispatch.dispatch_actualCollectionDate = new Date();
-      dispatch.dispatch_collectionVerified = true;
-
-      // Award points
       const pointsToAward = 50;
-      dispatch.dispatch_pointsAwarded = pointsToAward;
 
-      const waste = await wasteAnalysis.findById(
-        dispatch.dispatch_wasteAnalysis
-      );
-      if (waste) {
-        waste.waste_status = "collected";
-        await waste.save();
+      updateData.dispatch_actualCollectionDate = new Date();
+      updateData.dispatch_collectionVerified = true;
+      updateData.dispatch_pointsAwarded = pointsToAward;
 
-        // Award user
-        await User.findByIdAndUpdate(waste.waste_analysedBy, {
-          $inc: { points: pointsToAward },
-        });
+      // Update waste status
+      await prisma.wasteAnalysis.update({
+        where: { waste_id: dispatch.dispatch_wasteAnalysisId },
+        data: { waste_status: "collected" },
+      });
 
-        // Notify user
-        await Notification.create({
-          user: waste.waste_analysedBy,
-          type: "dispatch_completed",
-          title: "Waste Collected! ✅",
-          message: `Your reported waste has been collected. You earned ${pointsToAward} points!`,
-          relatedModel: "Dispatch",
-          relatedId: dispatch._id,
-        });
-      }
+      // Award points to user
+      await prisma.user.update({
+        where: { user_id: dispatch.dispatch_wasteAnalysis.waste_analysedBy },
+        data: {
+          user_points: {
+            increment: pointsToAward,
+          },
+        },
+      });
+
+      // Create reward record
+      const reward = await prisma.reward.create({
+        data: {
+          reward_userId: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
+          reward_wasteAnalysisId: dispatch.dispatch_wasteAnalysisId,
+          reward_pointsEarned: pointsToAward,
+          reward_reason: "cleanup_verified",
+          reward_transactionType: "credit",
+        },
+      });
+
+      // Notify user about collection and reward
+      await prisma.notification.create({
+        data: {
+          notification_userId:
+            dispatch.dispatch_wasteAnalysis.waste_analysedBy,
+          notification_entityType: "dispatch",
+          notification_entityId: dispatch.dispatch_id,
+          notification_type: "cleanup_verified",
+          notification_title: "Waste Collected! ✅",
+          notification_message: `Your reported waste has been collected by ${dispatch.dispatch_assignedTeam.team_name}. You earned ${pointsToAward} points!`,
+          notification_priority: "high",
+          notification_metadata: {
+            dispatchId: dispatch.dispatch_id,
+            pointsEarned: pointsToAward,
+            rewardId: reward.reward_id,
+            teamName: dispatch.dispatch_assignedTeam.team_name,
+          },
+        },
+      });
 
       // Free up truck
-      const truck = await Truck.findById(dispatch.dispatch_assignedTruck);
-      if (truck) {
-        truck.truck_status = "available";
-        await truck.save();
-      }
+      await prisma.truck.update({
+        where: { truck_id: dispatch.dispatch_assignedTruckId },
+        data: { truck_status: "available" },
+      });
+
+      // Notify admins
+      const admins = await prisma.user.findMany({
+        where: { user_role: "admin" },
+        select: { user_id: true },
+      });
+
+      const adminNotifications = admins.map((admin) =>
+        prisma.notification.create({
+          data: {
+            notification_userId: admin.user_id,
+            notification_entityType: "dispatch",
+            notification_entityId: dispatch.dispatch_id,
+            notification_type: "dispatch_update",
+            notification_title: "Collection Completed",
+            notification_message: `${dispatch.dispatch_assignedTeam.team_name} completed collection at ${dispatch.dispatch_locationAddress}`,
+            notification_metadata: {
+              dispatchId: dispatch.dispatch_id,
+              teamName: dispatch.dispatch_assignedTeam.team_name,
+              pointsAwarded: pointsToAward,
+            },
+          },
+        })
+      );
+
+      await Promise.all(adminNotifications);
     }
 
-    await dispatch.save();
+    // Update dispatch
+    const updatedDispatch = await prisma.dispatch.update({
+      where: { dispatch_id: req.params.id },
+      data: updateData,
+      include: {
+        dispatch_wasteAnalysis: true,
+        dispatch_assignedTeam: true,
+        dispatch_assignedTruck: true,
+      },
+    });
 
     res.json({
       success: true,
       message: `Dispatch status updated from ${oldStatus} to ${status}`,
-      data: dispatch,
+      data: updatedDispatch,
+    });
+  })
+);
+
+// ============================================
+// UPLOAD COLLECTION IMAGES
+// ============================================
+router.post(
+  "/:id/images",
+  isAuthenticated,
+  upload.array("images", 5),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const dispatch = await prisma.dispatch.findUnique({
+      where: { dispatch_id: id },
+    });
+
+    if (!dispatch) {
+      return res.status(404).json({
+        success: false,
+        message: "Dispatch not found",
+      });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No images uploaded",
+      });
+    }
+
+    // Upload images to Cloudinary
+    const imageUrls = [];
+    for (const file of req.files) {
+      try {
+        const imageURL = await uploadToCloudinary(file, "dispatch-collections");
+        imageUrls.push(imageURL);
+      } catch (error) {
+        console.error("Image upload error:", error);
+      }
+    }
+
+    // Save image records
+    const imageRecords = await Promise.all(
+      imageUrls.map((url) =>
+        prisma.dispatchImage.create({
+          data: {
+            imageURL: url,
+            dispatchId: id,
+          },
+        })
+      )
+    );
+
+    res.json({
+      success: true,
+      message: `${imageRecords.length} collection images uploaded successfully`,
+      data: imageRecords,
     });
   })
 );
@@ -435,7 +963,21 @@ router.delete(
   isAuthenticated,
   isAdmin,
   asyncHandler(async (req, res) => {
-    const dispatch = await Dispatch.findById(req.params.id);
+    const { id } = req.params;
+    const adminUserId = req.user.user_id;
+
+    const dispatch = await prisma.dispatch.findUnique({
+      where: { dispatch_id: id },
+      include: {
+        dispatch_wasteAnalysis: {
+          include: {
+            waste_user: true,
+          },
+        },
+        dispatch_assignedTeam: true,
+        dispatch_assignedTruck: true,
+      },
+    });
 
     if (!dispatch) {
       return res.status(404).json({
@@ -445,23 +987,69 @@ router.delete(
     }
 
     // Free up resources
-    const waste = await wasteAnalysis.findById(dispatch.dispatch_wasteAnalysis);
-    if (waste && waste.waste_status === "dispatched") {
-      waste.waste_status = "pending_dispatch";
-      await waste.save();
-    }
+    await prisma.wasteAnalysis.update({
+      where: { waste_id: dispatch.dispatch_wasteAnalysisId },
+      data: { waste_status: "pending_dispatch" },
+    });
 
-    const truck = await Truck.findById(dispatch.dispatch_assignedTruck);
-    if (truck && truck.truck_status === "in_use") {
-      truck.truck_status = "available";
-      await truck.save();
-    }
+    await prisma.truck.update({
+      where: { truck_id: dispatch.dispatch_assignedTruckId },
+      data: { truck_status: "available" },
+    });
 
-    await dispatch.deleteOne();
+    // Notify user about cancellation
+    await prisma.notification.create({
+      data: {
+        notification_userId: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
+        notification_entityType: "dispatch",
+        notification_entityId: dispatch.dispatch_id,
+        notification_type: "dispatch_update",
+        notification_title: "Dispatch Cancelled",
+        notification_message:
+          "Your scheduled pickup has been cancelled. We will reschedule soon.",
+        notification_priority: "high",
+        notification_metadata: {
+          dispatchId: dispatch.dispatch_id,
+          reason: "cancelled_by_admin",
+        },
+      },
+    });
+
+    // Notify admins
+    const admins = await prisma.user.findMany({
+      where: { user_role: "admin" },
+      select: { user_id: true },
+    });
+
+    const adminNotifications = admins
+      .filter((admin) => admin.user_id !== adminUserId)
+      .map((admin) =>
+        prisma.notification.create({
+          data: {
+            notification_userId: admin.user_id,
+            notification_entityType: "dispatch",
+            notification_entityId: dispatch.dispatch_id,
+            notification_type: "dispatch_update",
+            notification_title: "Dispatch Cancelled",
+            notification_message: `Dispatch at ${dispatch.dispatch_locationAddress} has been cancelled`,
+            notification_metadata: {
+              dispatchId: dispatch.dispatch_id,
+              cancelledBy: adminUserId,
+            },
+          },
+        })
+      );
+
+    await Promise.all(adminNotifications);
+
+    // Delete dispatch
+    await prisma.dispatch.delete({
+      where: { dispatch_id: id },
+    });
 
     res.json({
       success: true,
-      message: "Dispatch cancelled and deleted",
+      message: "Dispatch cancelled and deleted successfully",
     });
   })
 );
