@@ -9,6 +9,7 @@ import { redeemRoutes } from "./redeem.routes.js";
 import { dispatchRoutes } from "./dispatch.routes.js";
 import { userDashboardRoutes } from "./dashboard.user.route.js";
 import { notificationRoutes } from "./notification.route.js";
+import { analyticsRoutes } from "./dashboard.admin.route.js";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use("/dispatch", dispatchRoutes);
 router.use("/product", productRoutes);
 router.use("/redeem", redeemRoutes);
 router.use("/user", userRoutes);
+router.use("/admin-dashboard", analyticsRoutes);
 router.use("/user-dashboard", userDashboardRoutes);
 router.use("/notification", notificationRoutes);
 
