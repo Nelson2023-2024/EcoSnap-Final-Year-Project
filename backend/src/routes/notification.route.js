@@ -109,35 +109,6 @@ router.get(
   })
 );
 
-// Get single notification
-router.get(
-  "/:id",
-  isAuthenticated,
-  asyncHandler(async (req, res) => {
-    const userId = req.user.user_id;
-    const { id } = req.params;
-
-    const notification = await prisma.notification.findFirst({
-      where: {
-        notification_id: id,
-        notification_userId: userId,
-      },
-    });
-
-    if (!notification) {
-      return res.status(404).json({
-        success: false,
-        message: "Notification not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: notification,
-    });
-  })
-);
-
 // Mark notification as read
 router.patch(
   "/:id/read",
@@ -281,6 +252,26 @@ router.delete(
 );
 
 // ==================== ADMIN ROUTES ====================
+
+// Get admin unread count (all unread notifications across all users)
+router.get(
+  "/admin/unread-count",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const unreadCount = await prisma.notification.count({
+      where: {
+        notification_isRead: false,
+        notification_status: "active",
+      },
+    });
+
+    res.json({
+      success: true,
+      unreadCount,
+    });
+  })
+);
 
 // Get all notifications (Admin only)
 router.get(
