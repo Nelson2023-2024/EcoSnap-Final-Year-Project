@@ -1,6 +1,7 @@
 import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { toast } from "react-hot-toast";
 //useQuery - GET || useMutation -> POST,GET,PUT,DELETE
 
@@ -8,7 +9,9 @@ import { toast } from "react-hot-toast";
 
 //get the autheniticated user
 export function useAuthUser() {
-  return useQuery({
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
     queryKey: ["authUser"],
     queryFn: async () => {
       const response = await fetch(`${API_URL}/auth/me`, {
@@ -20,10 +23,20 @@ export function useAuthUser() {
       }
 
       const data = await response.json();
-
       return data.user;
     },
   });
+
+  // ✅ Side-effects belong here in v5
+  useEffect(() => {
+    if (!query.data) return;
+
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+    queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
+  }, [query.data, queryClient]);
+
+  return query;
 }
 
 //login

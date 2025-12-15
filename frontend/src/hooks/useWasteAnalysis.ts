@@ -117,6 +117,11 @@ export function useAnalyzeWaste() {
 
       queryClient.invalidateQueries({ queryKey: ["authUser"] });
       queryClient.invalidateQueries({ queryKey: ["user-dashboard"] });
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
       toast.success(
         `${data.message} You earned ${data.pointsAwarded} points!`,
         {

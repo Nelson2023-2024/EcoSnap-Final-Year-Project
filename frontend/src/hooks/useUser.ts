@@ -97,6 +97,11 @@ export function useCreateCollector() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("Collector created successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create collector");
@@ -141,6 +146,11 @@ export function useUpdateUser() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["user", data.user_id] });
       toast.success("User updated successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update user");
@@ -170,6 +180,11 @@ export function useDeleteUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User deleted successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete user");

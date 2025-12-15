@@ -101,6 +101,11 @@ export function useCreateTruck() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       toast.success("Truck created successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create truck");
@@ -146,6 +151,11 @@ export function useUpdateTruck() {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       queryClient.invalidateQueries({ queryKey: ["truck", data.truck_id] });
       toast.success("Truck updated successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update truck");
@@ -175,6 +185,11 @@ export function useDeleteTruck() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       toast.success("Truck deleted successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete truck");

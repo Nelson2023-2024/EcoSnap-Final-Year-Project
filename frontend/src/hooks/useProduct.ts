@@ -89,6 +89,11 @@ export function useCreateProduct() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Product created successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create product");
@@ -144,6 +149,11 @@ export function useUpdateProduct() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", data.product_id] });
       toast.success("Product updated successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update product");
@@ -173,6 +183,11 @@ export function useDeleteProduct() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Product deleted successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete product");

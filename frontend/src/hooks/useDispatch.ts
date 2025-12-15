@@ -310,6 +310,11 @@ export function useCreateAutoDispatch() {
         queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
         queryClient.invalidateQueries({ queryKey: ["availability"] });
         queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+
+        // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
         
         const message = data.queueStatus?.isQueued
           ? `${data.message} - ${data.queueStatus.queueInfo.estimatedWaitTime}h wait`
@@ -354,6 +359,11 @@ export function useCreateManualDispatch() {
         queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
         queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
         queryClient.invalidateQueries({ queryKey: ["availability"] });
+
+        // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
         
         toast.success(data.message || "Dispatch created manually! 🚚");
       },
@@ -394,6 +404,11 @@ export function useUpdateDispatchStatus() {
         queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
         queryClient.invalidateQueries({ queryKey: ["availability"] });
         queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+
+        // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
         
         const statusMessages: Record<string, string> = {
           pending: "Dispatch set to pending 📋",
@@ -441,6 +456,11 @@ export function useDeleteDispatch() {
         queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
         queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
         queryClient.invalidateQueries({ queryKey: ["availability"] });
+
+        // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
         
         toast.success(data.message || "Dispatch cancelled successfully");
       },
