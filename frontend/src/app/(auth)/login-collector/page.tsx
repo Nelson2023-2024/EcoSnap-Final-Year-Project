@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
+import { Eye, EyeOff, LoaderIcon, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +58,7 @@ export default function CollectorLoginForm() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-background to-green-50">
-        <Loader2 className="h-12 w-12 animate-spin text-emerald-600" />
+        <LoaderIcon className="h-12 w-12 animate-spin text-emerald-600" />
       </div>
     );
   }
@@ -144,7 +144,7 @@ export default function CollectorLoginForm() {
             >
               {isLoggingIn ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <LoaderIcon className="h-5 w-5 animate-spin" />
                   Signing in...
                 </>
               ) : (

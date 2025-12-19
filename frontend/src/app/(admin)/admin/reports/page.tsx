@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Info, MapPin, Truck } from "lucide-react";
+import { LoaderIcon, Info, MapPin, Truck } from "lucide-react";
 import { useAdminWasteReportsInfinite } from "@/hooks/useWasteAnalysis";
 import { useCreateAutoDispatch } from "@/hooks/useDispatch";
 
@@ -136,7 +136,7 @@ const AdminWasteReports = () => {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-eco-primary" />
+          <LoaderIcon className="h-8 w-8 animate-spin text-eco-primary" />
           <p className="text-muted-foreground">Loading reports...</p>
         </div>
       </div>
@@ -408,7 +408,7 @@ const AdminWasteReports = () => {
                                   title="Create Dispatch"
                                 >
                                   {isCreatingAutoDispatch ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <LoaderIcon className="h-4 w-4 animate-spin" />
                                   ) : (
                                     <Truck className="h-4 w-4" />
                                   )}
@@ -428,7 +428,7 @@ const AdminWasteReports = () => {
                   >
                     {isFetchingNextPage && (
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <LoaderIcon className="h-5 w-5 animate-spin" />
                         <span>Loading more reports...</span>
                       </div>
                     )}

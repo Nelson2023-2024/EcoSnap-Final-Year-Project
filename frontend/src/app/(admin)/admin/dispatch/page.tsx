@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Loader2,
+  LoaderIcon,
   Truck,
   MapPin,
   Calendar,
@@ -387,7 +387,7 @@ export default function AdminDispatchPage() {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-eco-primary" />
+          <LoaderIcon className="h-8 w-8 animate-spin text-eco-primary" />
           <p className="text-muted-foreground">Loading dispatch system...</p>
         </div>
       </div>
@@ -723,7 +723,7 @@ export default function AdminDispatchPage() {
                 <CardContent>
                   {wasteLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-eco-primary" />
+                      <LoaderIcon className="h-6 w-6 animate-spin text-eco-primary" />
                     </div>
                   ) : dispatchableWaste && dispatchableWaste.data.length > 0 ? (
                     <div className="space-y-4">
@@ -751,7 +751,7 @@ export default function AdminDispatchPage() {
                               disabled={isCreatingAutoDispatch}
                             >
                               {isCreatingAutoDispatch ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                <LoaderIcon className="h-4 w-4 animate-spin mr-2" />
                               ) : (
                                 <Truck className="h-4 w-4 mr-2" />
                               )}
@@ -892,7 +892,7 @@ export default function AdminDispatchPage() {
                     </div>
                   ) : (
                     <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-eco-primary" />
+                      <LoaderIcon className="h-6 w-6 animate-spin text-eco-primary" />
                     </div>
                   )}
                 </CardContent>
@@ -1019,7 +1019,7 @@ export default function AdminDispatchPage() {
             >
               {isUpdatingStatus ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <LoaderIcon className="h-4 w-4 animate-spin mr-2" />
                   Updating...
                 </>
               ) : (
@@ -1117,7 +1117,7 @@ export default function AdminDispatchPage() {
             >
               {isCreatingManualDispatch ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <LoaderIcon className="h-4 w-4 animate-spin mr-2" />
                   Creating...
                 </>
               ) : (

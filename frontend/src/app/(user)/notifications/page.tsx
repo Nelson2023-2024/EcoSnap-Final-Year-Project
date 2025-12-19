@@ -8,7 +8,7 @@ import {
   Bell,
   Trash2,
   CheckCheck,
-  Loader2,
+  LoaderIcon,
   Calendar,
   Package,
   Award,
@@ -140,7 +140,7 @@ export default function UserNotifications() {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-eco-primary" />
+          <LoaderIcon className="h-8 w-8 animate-spin text-eco-primary" />
           <p className="text-muted-foreground">Loading notifications...</p>
         </div>
       </div>

@@ -11,7 +11,7 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Loader2,
+  LoaderIcon,
   Package,
   TrendingUp,
   Calendar,
@@ -39,7 +39,7 @@ const CollectorDashboard = () => {
         <main className="container mx-auto px-4 py-6 md:py-8">
           <div className="flex items-center justify-center h-96">
             <div className="text-center space-y-4">
-              <Loader2 className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
+              <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
               <p className="text-muted-foreground">Loading your dashboard...</p>
             </div>
           </div>

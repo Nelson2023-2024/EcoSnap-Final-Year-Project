@@ -19,7 +19,7 @@ import {
   Mail,
   Package,
   AlertCircle,
-  Loader2,
+  LoaderIcon,
   Upload,
   CheckCircle,
   Navigation,
@@ -63,7 +63,7 @@ const DispatchDetailsPage = () => {
       <div className="min-h-screen bg-background pt-16">
         <main className="container mx-auto px-4 py-6 md:py-8">
           <div className="flex items-center justify-center h-96">
-            <Loader2 className="h-12 w-12 animate-spin text-eco-primary" />
+            <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary" />
           </div>
         </main>
       </div>
@@ -195,7 +195,7 @@ const DispatchDetailsPage = () => {
               >
                 {isStarting ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
                     Starting...
                   </>
                 ) : (
@@ -527,7 +527,7 @@ const DispatchDetailsPage = () => {
             >
               {isCompleting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
                   Completing...
                 </>
               ) : (
@@ -592,7 +592,7 @@ const DispatchDetailsPage = () => {
             >
               {isReporting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
                   Reporting...
                 </>
               ) : (

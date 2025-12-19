@@ -11,7 +11,7 @@ import {
   MapPin,
   Truck,
   Calendar,
-  Loader2,
+  LoaderIcon,
   Package,
   Navigation,
   CheckCircle,
@@ -269,7 +269,7 @@ const AllDispatchesPage = () => {
               {isLoading ? (
                 <div className="flex items-center justify-center h-96">
                   <div className="text-center space-y-4">
-                    <Loader2 className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
+                    <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
                     <p className="text-muted-foreground">Loading dispatches...</p>
                   </div>
                 </div>
