@@ -26,10 +26,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Loader2,
   Truck,
@@ -46,6 +46,7 @@ import {
   Users,
   Package,
   Activity,
+  AlertTriangle,
 } from "lucide-react";
 import {
   useGetDispatches,
@@ -56,10 +57,117 @@ import {
   useDeleteDispatch,
   useCreateAutoDispatch,
   useCreateManualDispatch,
+  useGetJobStatus,
 } from "@/hooks/useDispatch";
 import { useTeams } from "@/hooks/useTeams";
 import { useTrucks } from "@/hooks/useTruck";
 
+// ============================================
+// JOB STATUS TRACKER COMPONENT
+// ============================================
+function JobStatusTracker({
+  jobId,
+  jobType,
+  onComplete,
+}: {
+  jobId: string | null;
+  jobType?: string;
+  onComplete?: () => void;
+}) {
+  const { data: jobStatus, isLoading } = useGetJobStatus(jobId);
+
+  if (!jobId || isLoading) return null;
+
+  const job = jobStatus?.job;
+  if (!job) return null;
+
+  const stateConfig = {
+    waiting: {
+      icon: Clock,
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-50 border-yellow-200",
+      message: "Waiting in queue...",
+    },
+    active: {
+      icon: Clock,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50 border-blue-200",
+      message: "Processing...",
+    },
+    completed: {
+      icon: CheckCircle2,
+      color: "text-green-600",
+      bgColor: "bg-green-50 border-green-200",
+      message: job.result?.success
+        ? `Completed! ${
+            job.result.dispatchId
+              ? `Dispatch ID: ${job.result.dispatchId.slice(0, 8)}...`
+              : ""
+          }`
+        : "Completed",
+    },
+    failed: {
+      icon: XCircle,
+      color: "text-red-600",
+      bgColor: "bg-red-50 border-red-200",
+      message: `Failed: ${job.error || "Unknown error"}`,
+    },
+    delayed: {
+      icon: AlertTriangle,
+      color: "text-orange-600",
+      bgColor: "bg-orange-50 border-orange-200",
+      message: "Delayed, will retry...",
+    },
+  };
+
+  const config = stateConfig[job.state] || stateConfig.waiting;
+  const Icon = config.icon;
+
+  // Call onComplete callback when job finishes
+  if (job.state === "completed" && onComplete) {
+    setTimeout(() => onComplete(), 1500);
+  }
+
+  return (
+    <Alert className={`${config.bgColor} border`}>
+      <Icon className={`h-4 w-4 ${config.color}`} />
+      <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{config.message}</span>
+          {job.state === "active" && job.progress > 0 && (
+            <span className="text-sm text-muted-foreground">
+              ({job.progress}%)
+            </span>
+          )}
+          {jobType && (
+            <Badge variant="outline" className="text-xs">
+              {jobType}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-mono">
+            Job: {job.id.slice(0, 8)}...
+          </span>
+          {job.state === "completed" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onComplete}
+              className="h-6 px-2 text-xs"
+            >
+              Dismiss
+            </Button>
+          )}
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 export default function AdminDispatchPage() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -69,14 +177,20 @@ export default function AdminDispatchPage() {
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<string>("");
   const [collectionNotes, setCollectionNotes] = useState("");
-  
+
   // Manual dispatch dialog state
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
   const [selectedWasteId, setSelectedWasteId] = useState("");
   const [selectedTeam, setSelectedTeam] = useState("");
   const [selectedTruck, setSelectedTruck] = useState("");
-  const [selectedPriority, setSelectedPriority] = useState<"low" | "normal" | "high" | "urgent">("normal");
+  const [selectedPriority, setSelectedPriority] = useState<
+    "low" | "normal" | "high" | "urgent"
+  >("normal");
   const [scheduledDate, setScheduledDate] = useState("");
+
+  // Job tracking state
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobType, setJobType] = useState<string>("");
 
   // Fetch data
   const dispatchParams = {
@@ -92,10 +206,8 @@ export default function AdminDispatchPage() {
     isError: dispatchesError,
   } = useGetDispatches(dispatchParams);
 
-  const {
-    data: dispatchableWaste,
-    isLoading: wasteLoading,
-  } = useGetDispatchableWaste(1, 10);
+  const { data: dispatchableWaste, isLoading: wasteLoading } =
+    useGetDispatchableWaste(1, 10);
 
   const { data: availability } = useGetAvailability();
   const { data: queueData } = useGetDispatchQueue();
@@ -105,8 +217,10 @@ export default function AdminDispatchPage() {
   // Mutations
   const { updateDispatchStatus, isUpdatingStatus } = useUpdateDispatchStatus();
   const { deleteDispatch, isDeletingDispatch } = useDeleteDispatch();
-  const { createAutoDispatch, isCreatingAutoDispatch } = useCreateAutoDispatch();
-  const { createManualDispatch, isCreatingManualDispatch } = useCreateManualDispatch();
+  const { createAutoDispatch, isCreatingAutoDispatch } =
+    useCreateAutoDispatch();
+  const { createManualDispatch, isCreatingManualDispatch } =
+    useCreateManualDispatch();
 
   const dispatches = dispatchesData?.data || [];
   const totalDispatches = dispatchesData?.total || 0;
@@ -114,19 +228,23 @@ export default function AdminDispatchPage() {
 
   // Calculate stats
   const activeDispatches = dispatches.filter(
-    (d) => d.dispatch_status === "assigned" || d.dispatch_status === "en_route"
+    (d) =>
+      d.dispatch_status === "assigned" || d.dispatch_status === "en_route"
   ).length;
   const completedToday = dispatches.filter(
     (d) =>
       d.dispatch_status === "completed" &&
-      new Date(d.dispatch_actualCollectionDate || "").toDateString() === new Date().toDateString()
+      new Date(d.dispatch_actualCollectionDate || "").toDateString() ===
+        new Date().toDateString()
   ).length;
-  const pendingDispatches = dispatches.filter((d) => d.dispatch_status === "pending").length;
+  const pendingDispatches = dispatches.filter(
+    (d) => d.dispatch_status === "pending"
+  ).length;
 
   // Handlers
   const handleStatusUpdate = () => {
     if (!selectedDispatch || !newStatus) return;
-    
+
     updateDispatchStatus(
       {
         dispatchId: selectedDispatch,
@@ -134,7 +252,9 @@ export default function AdminDispatchPage() {
         collectionNotes: collectionNotes || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          setActiveJobId(data.jobId);
+          setJobType(`status-update: ${newStatus}`);
           setIsStatusDialogOpen(false);
           setSelectedDispatch(null);
           setNewStatus("");
@@ -145,14 +265,31 @@ export default function AdminDispatchPage() {
   };
 
   const handleDeleteDispatch = (dispatchId: string) => {
-    if (confirm("Are you sure you want to cancel this dispatch? This action cannot be undone.")) {
-      deleteDispatch(dispatchId);
+    if (
+      confirm(
+        "Are you sure you want to cancel this dispatch? This action cannot be undone."
+      )
+    ) {
+      deleteDispatch(dispatchId, {
+        onSuccess: (data) => {
+          setActiveJobId(data.jobId);
+          setJobType("cancel-dispatch");
+        },
+      });
     }
   };
 
   const handleAutoDispatch = (wasteId: string) => {
     if (confirm("Create automatic dispatch for this waste report?")) {
-      createAutoDispatch({ wasteAnalysisId: wasteId });
+      createAutoDispatch(
+        { wasteAnalysisId: wasteId },
+        {
+          onSuccess: (data) => {
+            setActiveJobId(data.jobId);
+            setJobType("auto-dispatch");
+          },
+        }
+      );
     }
   };
 
@@ -168,7 +305,9 @@ export default function AdminDispatchPage() {
         scheduledDate: scheduledDate || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          setActiveJobId(data.jobId);
+          setJobType("manual-dispatch");
           setIsManualDialogOpen(false);
           setSelectedWasteId("");
           setSelectedTeam("");
@@ -191,22 +330,32 @@ export default function AdminDispatchPage() {
     setIsManualDialogOpen(true);
   };
 
+  const clearJobTracking = () => {
+    setActiveJobId(null);
+    setJobType("");
+  };
+
   // Filter trucks by selected team
   const availableTrucks = trucks?.filter((truck: any) => {
     if (!selectedTeam) return true;
-    const team = teams?.find((t: any) => t.team_id === selectedTeam);
     return truck.truck_assignedTeamId === selectedTeam;
   });
 
   // Utility functions
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      pending: "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/40",
-      assigned: "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/40",
-      en_route: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40",
-      collected: "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/40",
-      completed: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40",
-      cancelled: "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40",
+      pending:
+        "bg-gray-500/20 text-gray-700 dark:text-gray-400 border-gray-500/40",
+      assigned:
+        "bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-500/40",
+      en_route:
+        "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40",
+      collected:
+        "bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/40",
+      completed:
+        "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40",
+      cancelled:
+        "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40",
     };
     return colors[status] || colors.pending;
   };
@@ -271,6 +420,15 @@ export default function AdminDispatchPage() {
             </p>
           </div>
 
+          {/* Active Job Status Tracker */}
+          {activeJobId && (
+            <JobStatusTracker
+              jobId={activeJobId}
+              jobType={jobType}
+              onComplete={clearJobTracking}
+            />
+          )}
+
           {/* Stats Overview */}
           <div className="grid gap-4 md:grid-cols-4">
             <Card className="border-border">
@@ -293,7 +451,9 @@ export default function AdminDispatchPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">{activeDispatches}</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {activeDispatches}
+                </div>
               </CardContent>
             </Card>
 
@@ -305,7 +465,9 @@ export default function AdminDispatchPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-eco-success">{completedToday}</div>
+                <div className="text-2xl font-bold text-eco-success">
+                  {completedToday}
+                </div>
               </CardContent>
             </Card>
 
@@ -317,7 +479,9 @@ export default function AdminDispatchPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-warning">{pendingDispatches}</div>
+                <div className="text-2xl font-bold text-warning">
+                  {pendingDispatches}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -339,7 +503,10 @@ export default function AdminDispatchPage() {
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
                       <Label>Status:</Label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <Select
+                        value={statusFilter}
+                        onValueChange={setStatusFilter}
+                      >
                         <SelectTrigger className="w-[160px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -357,7 +524,10 @@ export default function AdminDispatchPage() {
 
                     <div className="flex items-center gap-2">
                       <Label>Priority:</Label>
-                      <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                      <Select
+                        value={priorityFilter}
+                        onValueChange={setPriorityFilter}
+                      >
                         <SelectTrigger className="w-[140px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -380,7 +550,9 @@ export default function AdminDispatchPage() {
                   {dispatches.length === 0 ? (
                     <div className="py-12 text-center">
                       <TruckIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">No dispatches found</p>
+                      <p className="text-muted-foreground">
+                        No dispatches found
+                      </p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -394,7 +566,9 @@ export default function AdminDispatchPage() {
                             <TableHead>Status</TableHead>
                             <TableHead>Priority</TableHead>
                             <TableHead>Scheduled</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="text-right">
+                              Actions
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -408,31 +582,43 @@ export default function AdminDispatchPage() {
                                 <div className="flex items-start gap-1 max-w-xs">
                                   <MapPin className="h-4 w-4 text-eco-primary mt-0.5 flex-shrink-0" />
                                   <span className="text-sm line-clamp-2">
-                                    {dispatch.dispatch_locationAddress || "Unknown"}
+                                    {dispatch.dispatch_locationAddress ||
+                                      "Unknown"}
                                   </span>
                                 </div>
                               </TableCell>
 
                               <TableCell>
                                 <span className="text-sm">
-                                  {dispatch.dispatch_assignedTeam?.team_name || "N/A"}
+                                  {dispatch.dispatch_assignedTeam?.team_name ||
+                                    "N/A"}
                                 </span>
                               </TableCell>
 
                               <TableCell>
                                 <span className="text-sm font-mono">
-                                  {dispatch.dispatch_assignedTruck?.truck_registrationNumber || "N/A"}
+                                  {dispatch.dispatch_assignedTruck
+                                    ?.truck_registrationNumber || "N/A"}
                                 </span>
                               </TableCell>
 
                               <TableCell>
-                                <Badge className={getStatusColor(dispatch.dispatch_status)}>
+                                <Badge
+                                  className={getStatusColor(
+                                    dispatch.dispatch_status
+                                  )}
+                                >
                                   {formatStatus(dispatch.dispatch_status)}
                                 </Badge>
                               </TableCell>
 
                               <TableCell>
-                                <Badge variant="outline" className={getPriorityColor(dispatch.dispatch_priority)}>
+                                <Badge
+                                  variant="outline"
+                                  className={getPriorityColor(
+                                    dispatch.dispatch_priority
+                                  )}
+                                >
                                   {dispatch.dispatch_priority.toUpperCase()}
                                 </Badge>
                               </TableCell>
@@ -446,7 +632,11 @@ export default function AdminDispatchPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => router.push(`/admin/dispatch/${dispatch.dispatch_id}`)}
+                                    onClick={() =>
+                                      router.push(
+                                        `/admin/dispatch/${dispatch.dispatch_id}`
+                                      )
+                                    }
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
@@ -454,7 +644,12 @@ export default function AdminDispatchPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => openStatusDialog(dispatch.dispatch_id, dispatch.dispatch_status)}
+                                    onClick={() =>
+                                      openStatusDialog(
+                                        dispatch.dispatch_id,
+                                        dispatch.dispatch_status
+                                      )
+                                    }
                                   >
                                     <Play className="h-4 w-4" />
                                   </Button>
@@ -464,7 +659,11 @@ export default function AdminDispatchPage() {
                                       variant="outline"
                                       size="sm"
                                       className="text-red-600 hover:bg-red-50"
-                                      onClick={() => handleDeleteDispatch(dispatch.dispatch_id)}
+                                      onClick={() =>
+                                        handleDeleteDispatch(
+                                          dispatch.dispatch_id
+                                        )
+                                      }
                                       disabled={isDeletingDispatch}
                                     >
                                       <Ban className="h-4 w-4" />
@@ -487,7 +686,9 @@ export default function AdminDispatchPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              onClick={() =>
+                                setCurrentPage((p) => Math.max(1, p - 1))
+                              }
                               disabled={currentPage === 1}
                             >
                               Previous
@@ -495,7 +696,11 @@ export default function AdminDispatchPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                              onClick={() =>
+                                setCurrentPage((p) =>
+                                  Math.min(totalPages, p + 1)
+                                )
+                              }
                               disabled={currentPage === totalPages}
                             >
                               Next
@@ -540,16 +745,24 @@ export default function AdminDispatchPage() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              onClick={() => handleAutoDispatch(waste.waste_id)}
+                              onClick={() =>
+                                handleAutoDispatch(waste.waste_id)
+                              }
                               disabled={isCreatingAutoDispatch}
                             >
-                              <Truck className="h-4 w-4 mr-2" />
+                              {isCreatingAutoDispatch ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <Truck className="h-4 w-4 mr-2" />
+                              )}
                               Auto Dispatch
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => openManualDispatchDialog(waste.waste_id)}
+                              onClick={() =>
+                                openManualDispatchDialog(waste.waste_id)
+                              }
                             >
                               Manual
                             </Button>
@@ -578,23 +791,33 @@ export default function AdminDispatchPage() {
                       {/* Summary */}
                       <div className="grid gap-4 md:grid-cols-4 p-4 bg-muted rounded-lg">
                         <div>
-                          <p className="text-sm text-muted-foreground">Total Teams</p>
-                          <p className="text-2xl font-bold">{availability.summary.totalTeams}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Total Teams
+                          </p>
+                          <p className="text-2xl font-bold">
+                            {availability.summary.totalTeams}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Available</p>
+                          <p className="text-sm text-muted-foreground">
+                            Available
+                          </p>
                           <p className="text-2xl font-bold text-green-600">
                             {availability.summary.teamsWithAvailableTrucks}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Available Trucks</p>
+                          <p className="text-sm text-muted-foreground">
+                            Available Trucks
+                          </p>
                           <p className="text-2xl font-bold text-blue-600">
                             {availability.summary.totalAvailableTrucks}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Busy Trucks</p>
+                          <p className="text-sm text-muted-foreground">
+                            Busy Trucks
+                          </p>
                           <p className="text-2xl font-bold text-orange-600">
                             {availability.summary.totalBusyTrucks}
                           </p>
@@ -616,19 +839,31 @@ export default function AdminDispatchPage() {
                                 </p>
                               </div>
                               <Badge
-                                variant={team.immediatelyAvailable ? "default" : "secondary"}
+                                variant={
+                                  team.immediatelyAvailable
+                                    ? "default"
+                                    : "secondary"
+                                }
                               >
-                                {team.immediatelyAvailable ? "Available" : "Busy"}
+                                {team.immediatelyAvailable
+                                  ? "Available"
+                                  : "Busy"}
                               </Badge>
                             </div>
 
                             <div className="grid grid-cols-3 gap-4 text-sm">
                               <div>
-                                <p className="text-muted-foreground">Total Trucks</p>
-                                <p className="font-medium">{team.totalTrucks}</p>
+                                <p className="text-muted-foreground">
+                                  Total Trucks
+                                </p>
+                                <p className="font-medium">
+                                  {team.totalTrucks}
+                                </p>
                               </div>
                               <div>
-                                <p className="text-muted-foreground">Available</p>
+                                <p className="text-muted-foreground">
+                                  Available
+                                </p>
                                 <p className="font-medium text-green-600">
                                   {team.availableTrucks}
                                 </p>
@@ -641,14 +876,16 @@ export default function AdminDispatchPage() {
                               </div>
                             </div>
 
-                            {!team.immediatelyAvailable && team.nextAvailableTime && (
-                              <div className="pt-2 border-t">
-                                <p className="text-sm text-muted-foreground">
-                                  Next available: {formatDate(team.nextAvailableTime)} (~
-                                  {team.estimatedWaitHours}h wait)
-                                </p>
-                              </div>
-                            )}
+                            {!team.immediatelyAvailable &&
+                              team.nextAvailableTime && (
+                                <div className="pt-2 border-t">
+                                  <p className="text-sm text-muted-foreground">
+                                    Next available:{" "}
+                                    {formatDate(team.nextAvailableTime)} (~
+                                    {team.estimatedWaitHours}h wait)
+                                  </p>
+                                </div>
+                              )}
                           </div>
                         ))}
                       </div>
@@ -666,7 +903,9 @@ export default function AdminDispatchPage() {
             <TabsContent value="queue" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Dispatch Queue ({queueData?.total || 0})</CardTitle>
+                  <CardTitle>
+                    Dispatch Queue ({queueData?.total || 0})
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {queueData && queueData.data.length > 0 ? (
@@ -690,7 +929,11 @@ export default function AdminDispatchPage() {
                                 </p>
                               </div>
                             </div>
-                            <Badge className={getPriorityColor(dispatch.dispatch_priority)}>
+                            <Badge
+                              className={getPriorityColor(
+                                dispatch.dispatch_priority
+                              )}
+                            >
                               {dispatch.dispatch_priority}
                             </Badge>
                           </div>
@@ -699,7 +942,8 @@ export default function AdminDispatchPage() {
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Clock className="h-4 w-4" />
                               <span>
-                                Estimated activation: {formatDate(dispatch.estimatedActivation)} (~
+                                Estimated activation:{" "}
+                                {formatDate(dispatch.estimatedActivation)} (~
                                 {dispatch.waitTimeHours}h)
                               </span>
                             </div>
@@ -708,14 +952,20 @@ export default function AdminDispatchPage() {
                           {dispatch.blockedBy && (
                             <div className="flex items-center gap-2 text-sm text-orange-600">
                               <AlertCircle className="h-4 w-4" />
-                              <span>Waiting for dispatch {dispatch.blockedBy.dispatchId.slice(0, 8)} to complete</span>
+                              <span>
+                                Waiting for dispatch{" "}
+                                {dispatch.blockedBy.dispatchId.slice(0, 8)} to
+                                complete
+                              </span>
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-center py-8 text-muted-foreground">No queued dispatches</p>
+                    <p className="text-center py-8 text-muted-foreground">
+                      No queued dispatches
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -858,7 +1108,11 @@ export default function AdminDispatchPage() {
 
             <Button
               onClick={handleManualDispatch}
-              disabled={!selectedTeam || !selectedTruck || isCreatingManualDispatch}
+              disabled={
+                !selectedTeam ||
+                !selectedTruck ||
+                isCreatingManualDispatch
+              }
               className="w-full bg-eco-primary hover:bg-eco-primary/90"
             >
               {isCreatingManualDispatch ? (

@@ -1,3 +1,4 @@
+// src/hooks/useDispatch.ts
 import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
@@ -92,6 +93,45 @@ interface PaginatedDispatchResponse {
 interface SingleDispatchResponse {
   success: boolean;
   data: Dispatch;
+}
+
+// ============================================
+// JOB RESPONSE TYPES
+// ============================================
+interface JobResponse {
+  success: boolean;
+  message: string;
+  jobId: string;
+  queueStatus?: {
+    isQueued: boolean;
+    queueInfo?: {
+      waitingForDispatch: string;
+      currentDispatchETA: string;
+      truckAvailableAfter: string;
+      estimatedWaitTime: number;
+    };
+  };
+  estimatedProcessingTime: string;
+}
+
+interface JobStatus {
+  success: boolean;
+  job: {
+    id: string;
+    name: string;
+    state: "waiting" | "active" | "completed" | "failed" | "delayed";
+    progress: number;
+    result?: {
+      success: boolean;
+      dispatchId?: string;
+      dispatch?: Dispatch;
+    };
+    error?: string;
+    attemptsMade: number;
+    timestamp: number;
+    processedOn?: number;
+    finishedOn?: number;
+  };
 }
 
 interface CreateAutoDispatchParams {
@@ -200,6 +240,39 @@ interface QueueResponse {
 }
 
 // ============================================
+// GET JOB STATUS
+// ============================================
+export function useGetJobStatus(jobId: string | null) {
+  return useQuery<JobStatus, Error>({
+    queryKey: ["jobStatus", jobId],
+    queryFn: async () => {
+      if (!jobId) throw new Error("No job ID provided");
+
+      const response = await fetch(`${API_URL}/dispatch/job/${jobId}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to fetch job status");
+      }
+
+      return response.json();
+    },
+    enabled: !!jobId,
+    refetchInterval: (data) => {
+      // Stop polling if job is completed or failed
+      if (!data?.job) return false;
+      const state = data.job.state;
+      if (state === "completed" || state === "failed") return false;
+      // Poll every 2 seconds while job is processing
+      return 2000;
+    },
+    staleTime: 0, // Always fetch fresh data
+  });
+}
+
+// ============================================
 // CHECK IF WASTE CAN BE DISPATCHED
 // ============================================
 export function useCanDispatch(wasteAnalysisId: string) {
@@ -219,7 +292,7 @@ export function useCanDispatch(wasteAnalysisId: string) {
       return response.json();
     },
     enabled: !!wasteAnalysisId,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 30,
   });
 }
 
@@ -251,7 +324,7 @@ export function useGetDispatches(params?: GetDispatchesParams) {
 
       return response.json();
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60,
   });
 }
 
@@ -301,26 +374,27 @@ export function useCreateAutoDispatch() {
           throw new Error(error.message || "Failed to create auto dispatch");
         }
 
-        return response.json();
+        return response.json() as Promise<JobResponse>;
       },
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ["dispatches"] });
-        queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
-        queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
-        queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
-        queryClient.invalidateQueries({ queryKey: ["availability"] });
-        queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+        toast.success(`${data.message}`, {
+          duration: 4000,
+        });
 
-        // ✅ Invalidate notifications directly
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
-        
-        const message = data.queueStatus?.isQueued
-          ? `${data.message} - ${data.queueStatus.queueInfo.estimatedWaitTime}h wait`
-          : data.message;
-        
-        toast.success(message || "Dispatch created automatically! 🚚");
+        // Invalidate queries after a delay to allow job processing
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["dispatches"] });
+          queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
+          queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
+          queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
+          queryClient.invalidateQueries({ queryKey: ["availability"] });
+          queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+          queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
+        }, 3000);
+
+        return data;
       },
       onError: (error: Error) => {
         toast.error(error.message || "Failed to create dispatch");
@@ -351,21 +425,25 @@ export function useCreateManualDispatch() {
           throw new Error(error.message || "Failed to create manual dispatch");
         }
 
-        return response.json();
+        return response.json() as Promise<JobResponse>;
       },
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ["dispatches"] });
-        queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
-        queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
-        queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
-        queryClient.invalidateQueries({ queryKey: ["availability"] });
+        toast.success(`${data.message}`, {
+          duration: 4000,
+        });
 
-        // ✅ Invalidate notifications directly
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
-        
-        toast.success(data.message || "Dispatch created manually! 🚚");
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["dispatches"] });
+          queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
+          queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
+          queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
+          queryClient.invalidateQueries({ queryKey: ["availability"] });
+          queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
+        }, 3000);
+
+        return data;
       },
       onError: (error: Error) => {
         toast.error(error.message || "Failed to create dispatch");
@@ -383,7 +461,11 @@ export function useUpdateDispatchStatus() {
 
   const { mutate: updateDispatchStatus, isPending: isUpdatingStatus } =
     useMutation({
-      mutationFn: async ({ dispatchId, status, collectionNotes }: UpdateDispatchStatusParams) => {
+      mutationFn: async ({
+        dispatchId,
+        status,
+        collectionNotes,
+      }: UpdateDispatchStatusParams) => {
         const response = await fetch(`${API_URL}/dispatch/${dispatchId}/status`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -396,30 +478,27 @@ export function useUpdateDispatchStatus() {
           throw new Error(error.message || "Failed to update dispatch status");
         }
 
-        return response.json();
+        return response.json() as Promise<JobResponse>;
       },
       onSuccess: (data, variables) => {
-        queryClient.invalidateQueries({ queryKey: ["dispatches"] });
-        queryClient.invalidateQueries({ queryKey: ["dispatch", variables.dispatchId] });
-        queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
-        queryClient.invalidateQueries({ queryKey: ["availability"] });
-        queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+        toast.success(`Status update queued`, {
+          duration: 4000,
+        });
 
-        // ✅ Invalidate notifications directly
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
-        
-        const statusMessages: Record<string, string> = {
-          pending: "Dispatch set to pending 📋",
-          assigned: "Dispatch assigned! 📋",
-          en_route: "Team is en route! 🚚",
-          collected: "Waste collected! ✅",
-          completed: "Dispatch completed! 🎉",
-          cancelled: "Dispatch cancelled ❌",
-        };
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["dispatches"] });
+          queryClient.invalidateQueries({
+            queryKey: ["dispatch", variables.dispatchId],
+          });
+          queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
+          queryClient.invalidateQueries({ queryKey: ["availability"] });
+          queryClient.invalidateQueries({ queryKey: ["dispatchQueue"] });
+          queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
+        }, 3000);
 
-        toast.success(statusMessages[variables.status] || data.message || "Status updated!");
+        return data;
       },
       onError: (error: Error) => {
         toast.error(error.message || "Failed to update status");
@@ -435,39 +514,42 @@ export function useUpdateDispatchStatus() {
 export function useDeleteDispatch() {
   const queryClient = useQueryClient();
 
-  const { mutate: deleteDispatch, isPending: isDeletingDispatch } =
-    useMutation({
-      mutationFn: async (dispatchId: string) => {
-        const response = await fetch(`${API_URL}/dispatch/${dispatchId}`, {
-          method: "DELETE",
-          credentials: "include",
-        });
+  const { mutate: deleteDispatch, isPending: isDeletingDispatch } = useMutation({
+    mutationFn: async (dispatchId: string) => {
+      const response = await fetch(`${API_URL}/dispatch/${dispatchId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Failed to delete dispatch");
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete dispatch");
+      }
 
-        return response.json();
-      },
-      onSuccess: (data) => {
+      return response.json() as Promise<JobResponse>;
+    },
+    onSuccess: (data) => {
+      toast.success(`Dispatch cancellation queued`, {
+        duration: 4000,
+      });
+
+      setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["dispatches"] });
         queryClient.invalidateQueries({ queryKey: ["wasteAnalysis"] });
         queryClient.invalidateQueries({ queryKey: ["adminWasteReports"] });
         queryClient.invalidateQueries({ queryKey: ["dispatchableWaste"] });
         queryClient.invalidateQueries({ queryKey: ["availability"] });
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+        queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
+      }, 3000);
 
-        // ✅ Invalidate notifications directly
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
-        
-        toast.success(data.message || "Dispatch cancelled successfully");
-      },
-      onError: (error: Error) => {
-        toast.error(error.message || "Failed to delete dispatch");
-      },
-    });
+      return data;
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete dispatch");
+    },
+  });
 
   return { deleteDispatch, isDeletingDispatch };
 }
@@ -493,7 +575,7 @@ export function useGetAvailability(specialization?: string) {
 
       return response.json();
     },
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 30,
   });
 }
 
@@ -516,7 +598,7 @@ export function useGetDispatchableWaste(page = 1, limit = 20) {
 
       return response.json();
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60,
   });
 }
 
@@ -541,7 +623,7 @@ export function useGetDispatchQueue(teamId?: string) {
 
       return response.json();
     },
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 30,
   });
 }
 
