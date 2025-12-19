@@ -80,3 +80,69 @@ export function useLogout() {
 
   return { logout, isLoggingOut };
 }
+
+// Collector login
+export function useCollectorLogin() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  const { mutate: loginCollector, isPending: isLoggingIn } = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const response = await fetch(`${API_URL}/collector-auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Login failed");
+      }
+
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["authUser"], data.user);
+      toast.success("Login successful!");
+      router.push("/collector-dashboard");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to login");
+    },
+  });
+
+  return { loginCollector, isLoggingIn };
+}
+
+// Get authenticated collector
+export function useAuthCollector() {
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["authCollector"],
+    queryFn: async () => {
+      const response = await fetch(`${API_URL}/collector-auth/me`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      return data.user;
+    },
+  });
+
+  useEffect(() => {
+    if (!query.data) return;
+
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  }, [query.data, queryClient]);
+
+  return query;
+}
