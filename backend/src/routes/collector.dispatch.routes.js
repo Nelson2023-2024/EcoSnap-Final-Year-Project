@@ -490,14 +490,8 @@ router.post(
     const pointsAwarded =
       basePoints + (priorityBonus[dispatch.dispatch_priority] || 10);
 
-    // Update dispatch, waste, truck, and user in transaction
-    const [
-      updatedDispatch,
-      updatedWaste,
-      updatedTruck,
-      updatedUser,
-      imageRecords,
-    ] = await prisma.$transaction([
+    // Update dispatch, waste, truck, user, and save images in transaction
+    const transactionResults = await prisma.$transaction([
       // Update dispatch
       prisma.dispatch.update({
         where: { dispatch_id: id },
@@ -514,7 +508,6 @@ router.post(
           dispatch_wasteAnalysis: true,
         },
       }),
-
       // Update waste status
       prisma.wasteAnalysis.update({
         where: { waste_id: dispatch.dispatch_wasteAnalysisId },
@@ -522,7 +515,6 @@ router.post(
           waste_status: "collected",
         },
       }),
-
       // Release truck (set back to available)
       prisma.truck.update({
         where: { truck_id: dispatch.dispatch_assignedTruckId },
@@ -530,29 +522,34 @@ router.post(
           truck_status: "available",
         },
       }),
-
       // Award points to user
       prisma.user.update({
-        where: { user_id: dispatch.dispatch_wasteAnalysis.waste_analysedBy },
+        where: {
+          user_id: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
+        },
         data: {
           user_points: {
             increment: pointsAwarded,
           },
         },
       }),
-
-      // Save verification images
-      prisma.$transaction(
-        imageUrls.map((url) =>
-          prisma.dispatchImage.create({
-            data: {
-              imageURL: url,
-              dispatchId: id,
-            },
-          })
-        )
+      // Save verification images - spread the array of promises
+      ...imageUrls.map((url) =>
+        prisma.dispatchImage.create({
+          data: {
+            imageURL: url,
+            dispatchId: id,
+          },
+        })
       ),
     ]);
+
+    // Extract results from transaction
+    const updatedDispatch = transactionResults[0];
+    const updatedWaste = transactionResults[1];
+    const updatedTruck = transactionResults[2];
+    const updatedUser = transactionResults[3];
+    const imageRecords = transactionResults.slice(4); // All remaining results are images
 
     // Check if there are pending dispatches for this truck and activate the next one
     const nextPendingDispatch = await prisma.dispatch.findFirst({
@@ -590,7 +587,7 @@ router.post(
       });
 
       const teamNotifications = teamMembers.map((member) =>
-        notificationQueue.add('send-notification', {
+        notificationQueue.add("send-notification", {
           userId: member.userId,
           type: "dispatch_assigned",
           title: "New Dispatch Assigned 📋",
@@ -610,13 +607,11 @@ router.post(
     }
 
     // Notify waste reporter about collection
-    await notificationQueue.add('send-notification', {
+    await notificationQueue.add("send-notification", {
       userId: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
       type: "cleanup_verified",
       title: "Waste Collected Successfully! 🎉",
-      message: `Your reported waste has been collected. You've earned ${pointsAwarded} points! Total points: ${
-        updatedUser.user_points
-      }`,
+      message: `Your reported waste has been collected. You've earned ${pointsAwarded} points! Total points: ${updatedUser.user_points}`,
       entityType: "dispatch",
       entityId: id,
       priority: "high",
@@ -636,7 +631,7 @@ router.post(
     });
 
     const adminNotifications = admins.map((admin) =>
-      notificationQueue.add('send-notification', {
+      notificationQueue.add("send-notification", {
         userId: admin.user_id,
         type: "dispatch_update",
         title: "Dispatch Completed ✅",
