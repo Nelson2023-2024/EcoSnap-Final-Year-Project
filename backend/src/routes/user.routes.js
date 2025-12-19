@@ -1,5 +1,6 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
+import bcrypt from "bcrypt";
 import { prisma } from "../config/prisma.config.js";
 import { isAdmin, isAuthenticated } from "../middleware/auth.middleware.js";
 
@@ -15,37 +16,51 @@ router.use(isAuthenticated, isAdmin);
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { email, firstName, lastName, assignedTeam } = req.body;
+    const { email, firstName, lastName, assignedTeam, password } = req.body;
 
-    // Validate required fields
-    if (!email || !firstName || !lastName || !assignedTeam) {
-      return res.status(400).json({ message: "All fields are required" });
+    // ✅ Validate required fields
+    if (!email || !firstName || !lastName || !assignedTeam || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "email, firstName, lastName, assignedTeam and password are required",
+      });
     }
 
-    // Check if collector already exists
+    // ✅ Check if collector already exists
     const existingUser = await prisma.user.findUnique({
       where: { user_email: email },
     });
+
     if (existingUser) {
-      return res.status(400).json({ message: "Collector already exists" });
+      return res.status(400).json({
+        success: false,
+        message: "Collector already exists",
+      });
     }
 
-    // Validate team
+    // ✅ Validate team
     const team = await prisma.team.findUnique({
       where: { team_id: assignedTeam },
     });
+
     if (!team) {
-      return res.status(404).json({ message: "Team not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Team not found",
+      });
     }
 
-    // Generate username and fullName
-    const username = email.split("@")[0] + "_" + Date.now();
+    // ✅ Hash password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Generate username and full name
+    const username = `${email.split("@")[0]}_${Date.now()}`;
     const fullName = `${firstName} ${lastName}`.trim();
 
-    // Create collector with team assignment in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Create collector
-      const collector = await tx.user.create({
+    // ✅ Transaction: create user + team membership
+    const collector = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
         data: {
           user_email: email,
           user_username: username,
@@ -53,23 +68,23 @@ router.post(
           user_lastName: lastName,
           user_fullName: fullName,
           user_role: "collector",
+          user_password: hashedPassword, // 🔐 STORED HASHED
         },
       });
 
-      // Create team membership
       await tx.teamMember.create({
         data: {
-          userId: collector.user_id,
+          userId: user.user_id,
           teamId: assignedTeam,
         },
       });
 
-      return collector;
+      return user;
     });
 
-    // Get populated collector
+    // ✅ Fetch populated collector
     const populatedCollector = await prisma.user.findUnique({
-      where: { user_id: result.user_id },
+      where: { user_id: collector.user_id },
       include: {
         user_assignedTeams: {
           include: {
@@ -86,45 +101,42 @@ router.post(
       },
     });
 
-    // Get all admins and collectors for notifications
-    const adminsAndCollectors = await prisma.user.findMany({
+    // ✅ Notify admins & collectors
+    const recipients = await prisma.user.findMany({
       where: {
-        user_role: {
-          in: ["admin", "collector"],
-        },
+        user_role: { in: ["admin", "collector"] },
       },
       select: { user_id: true },
     });
 
-    // Notify all admins and collectors about new collector
-    const notifications = adminsAndCollectors.map((user) =>
-      prisma.notification.create({
-        data: {
-          notification_userId: user.user_id,
-          notification_entityType: "user",
-          notification_entityId: result.user_id,
-          notification_type: "team_update",
-          notification_title: "New Collector Added 👤",
-          notification_message: `${fullName} has been added as a collector and assigned to ${team.team_name}.`,
-          notification_priority: "normal",
-          notification_metadata: {
-            userId: result.user_id,
-            collectorName: fullName,
-            collectorEmail: email,
-            teamId: assignedTeam,
-            teamName: team.team_name,
-            action: "collector_added",
+    await Promise.all(
+      recipients.map((user) =>
+        prisma.notification.create({
+          data: {
+            notification_userId: user.user_id,
+            notification_entityType: "user",
+            notification_entityId: collector.user_id,
+            notification_type: "team_update",
+            notification_title: "New Collector Added 👤",
+            notification_message: `${fullName} has been added as a collector and assigned to ${team.team_name}.`,
+            notification_priority: "normal",
+            notification_metadata: {
+              userId: collector.user_id,
+              collectorName: fullName,
+              collectorEmail: email,
+              teamId: assignedTeam,
+              teamName: team.team_name,
+              action: "collector_added",
+            },
           },
-        },
-      })
+        })
+      )
     );
-
-    await Promise.all(notifications);
 
     res.status(201).json({
       success: true,
       data: populatedCollector,
-      notified: adminsAndCollectors.length,
+      notified: recipients.length,
     });
   })
 );
