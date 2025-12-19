@@ -76,6 +76,7 @@ export function useCreateCollector() {
       firstName: string;
       lastName: string;
       assignedTeam: string;
+      password: string; // ✅ Add password field
     }) => {
       const response = await fetch(`${API_URL}/user`, {
         method: "POST",
@@ -98,7 +99,6 @@ export function useCreateCollector() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("Collector created successfully!");
 
-      // ✅ Invalidate notifications directly
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notification-stats"] });

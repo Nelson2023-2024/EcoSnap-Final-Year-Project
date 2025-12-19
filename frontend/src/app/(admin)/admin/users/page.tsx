@@ -50,6 +50,7 @@ export default function Users() {
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
   const [assignedTeam, setAssignedTeam] = React.useState<string>("");
+  const [password, setPassword] = React.useState("");
 
   // Update user dialog state
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
@@ -83,8 +84,14 @@ export default function Users() {
   const handleCreateCollector = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !firstName || !lastName || !assignedTeam) {
+    if (!email || !firstName || !lastName || !assignedTeam || !password) {
       toast.error("All fields are required");
+      return;
+    }
+
+    // Password validation
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters long");
       return;
     }
 
@@ -94,12 +101,14 @@ export default function Users() {
         firstName,
         lastName,
         assignedTeam,
+        password,
       });
       setCreateDialogOpen(false);
       setEmail("");
       setFirstName("");
       setLastName("");
       setAssignedTeam("");
+      setPassword("");
     } catch (err) {
       // Error is already handled in the hook
     }
@@ -233,6 +242,21 @@ export default function Users() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
+              </div>
+
+              <div className="grid gap-3">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter password (min 8 characters)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={8}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Password must be at least 8 characters long
+                </p>
               </div>
 
               <div className="grid gap-3">

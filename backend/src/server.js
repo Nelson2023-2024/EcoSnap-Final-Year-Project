@@ -35,19 +35,19 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Bull Board Dashboard - MUST be before /api routes
-app.use('/admin/queues', bullRouter);
+app.use("/admin/queues", bullRouter);
 
 app.use("/api", rootRouter);
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: closing HTTP server and queues');
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM signal received: closing HTTP server and queues");
   await closeQueues();
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT signal received: closing HTTP server and queues');
+process.on("SIGINT", async () => {
+  console.log("SIGINT signal received: closing HTTP server and queues");
   await closeQueues();
   process.exit(0);
 });

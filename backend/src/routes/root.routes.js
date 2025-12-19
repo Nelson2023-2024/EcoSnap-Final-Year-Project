@@ -10,6 +10,7 @@ import { dispatchRoutes } from "./dispatch.routes.js";
 import { userDashboardRoutes } from "./dashboard.user.route.js";
 import { notificationRoutes } from "./notification.route.js";
 import { analyticsRoutes } from "./dashboard.admin.route.js";
+import { authCollectorRoutes } from "./auth.collector.routes.js";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use("/user", userRoutes);
 router.use("/admin-dashboard", analyticsRoutes);
 router.use("/user-dashboard", userDashboardRoutes);
 router.use("/notification", notificationRoutes);
+router.use("/collector-auth", authCollectorRoutes);
 
 export { router as rootRouter };
