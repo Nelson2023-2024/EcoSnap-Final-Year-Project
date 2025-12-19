@@ -115,6 +115,7 @@ export function useTeamAssignment() {
 }
 
 // Get collector dispatches
+// status can be: "active" (assigned + en_route), "assigned", "en_route", "collected", "completed", etc.
 export function useCollectorDispatches(status?: string, page = 1, limit = 20) {
   const params = new URLSearchParams();
   if (status) params.append("status", status);

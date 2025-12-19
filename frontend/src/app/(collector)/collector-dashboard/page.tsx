@@ -28,7 +28,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const CollectorDashboard = () => {
   const { data: teamData, isLoading: teamLoading, error: teamError } = useTeamAssignment();
-  const { data: dispatchesData, isLoading: dispatchesLoading } = useCollectorDispatches("assigned", 1, 5);
+  // Fetch both assigned AND en_route dispatches using "active" status
+  const { data: dispatchesData, isLoading: dispatchesLoading } = useCollectorDispatches("active", 1, 10);
   const { data: stats, isLoading: statsLoading } = useCollectorStats();
 
   // Loading state
@@ -65,6 +66,9 @@ const CollectorDashboard = () => {
 
   const pendingDispatches = dispatchesData?.data ?? [];
   const summary = dispatchesData?.summary ?? {};
+
+  // Calculate active dispatches (assigned + en_route)
+  const activeDispatchesCount = (summary.assigned ?? 0) + (summary.en_route ?? 0);
 
   // Stats cards
   const collectorStats = [
@@ -272,9 +276,9 @@ const CollectorDashboard = () => {
           <Card className="border-border">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-foreground">Pending Dispatches</CardTitle>
+                <CardTitle className="text-foreground">Active Dispatches</CardTitle>
                 <CardDescription>
-                  Tasks awaiting collection ({summary.assigned ?? 0})
+                  Tasks in progress ({activeDispatchesCount})
                 </CardDescription>
               </div>
               <Link href="/collector/dispatches">
@@ -353,7 +357,7 @@ const CollectorDashboard = () => {
               ) : (
                 <div className="text-center py-12 text-muted-foreground">
                   <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                  <p className="text-lg font-medium mb-2">No pending dispatches</p>
+                  <p className="text-lg font-medium mb-2">No active dispatches</p>
                   <p className="text-sm">All caught up! Check back later for new tasks.</p>
                 </div>
               )}

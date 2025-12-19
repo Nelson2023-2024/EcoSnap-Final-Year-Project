@@ -118,8 +118,16 @@ router.get(
       dispatch_assignedTeamId: teamMember.teamId,
     };
 
+    // Handle status filter - support multiple statuses
     if (status) {
-      filter.dispatch_status = status;
+      // If status is "active", get both assigned and en_route
+      if (status === "active") {
+        filter.dispatch_status = {
+          in: ["assigned", "en_route"],
+        };
+      } else {
+        filter.dispatch_status = status;
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -491,9 +499,9 @@ router.post(
       basePoints + (priorityBonus[dispatch.dispatch_priority] || 10);
 
     // Update dispatch, waste, truck, user, and save images in transaction
-    const transactionResults = await prisma.$transaction([
+    const result = await prisma.$transaction(async (tx) => {
       // Update dispatch
-      prisma.dispatch.update({
+      const updatedDispatch = await tx.dispatch.update({
         where: { dispatch_id: id },
         data: {
           dispatch_status: "collected",
@@ -507,49 +515,62 @@ router.post(
           dispatch_assignedTeam: true,
           dispatch_wasteAnalysis: true,
         },
-      }),
+      });
+
       // Update waste status
-      prisma.wasteAnalysis.update({
+      const updatedWaste = await tx.wasteAnalysis.update({
         where: { waste_id: dispatch.dispatch_wasteAnalysisId },
         data: {
           waste_status: "collected",
         },
-      }),
+      });
+
       // Release truck (set back to available)
-      prisma.truck.update({
+      const updatedTruck = await tx.truck.update({
         where: { truck_id: dispatch.dispatch_assignedTruckId },
         data: {
           truck_status: "available",
         },
-      }),
+      });
+
       // Award points to user
-      prisma.user.update({
-        where: {
-          user_id: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
-        },
+      const updatedUser = await tx.user.update({
+        where: { user_id: dispatch.dispatch_wasteAnalysis.waste_analysedBy },
         data: {
           user_points: {
             increment: pointsAwarded,
           },
         },
-      }),
-      // Save verification images - spread the array of promises
-      ...imageUrls.map((url) =>
-        prisma.dispatchImage.create({
-          data: {
-            imageURL: url,
-            dispatchId: id,
-          },
-        })
-      ),
-    ]);
+      });
 
-    // Extract results from transaction
-    const updatedDispatch = transactionResults[0];
-    const updatedWaste = transactionResults[1];
-    const updatedTruck = transactionResults[2];
-    const updatedUser = transactionResults[3];
-    const imageRecords = transactionResults.slice(4); // All remaining results are images
+      // Save verification images
+      const imageRecords = await Promise.all(
+        imageUrls.map((url) =>
+          tx.dispatchImage.create({
+            data: {
+              imageURL: url,
+              dispatchId: id,
+            },
+          })
+        )
+      );
+
+      return {
+        updatedDispatch,
+        updatedWaste,
+        updatedTruck,
+        updatedUser,
+        imageRecords,
+      };
+    });
+
+    const {
+      updatedDispatch,
+      updatedWaste,
+      updatedTruck,
+      updatedUser,
+      imageRecords,
+    } = result;
 
     // Check if there are pending dispatches for this truck and activate the next one
     const nextPendingDispatch = await prisma.dispatch.findFirst({
@@ -587,7 +608,7 @@ router.post(
       });
 
       const teamNotifications = teamMembers.map((member) =>
-        notificationQueue.add("send-notification", {
+        notificationQueue.add('send-notification', {
           userId: member.userId,
           type: "dispatch_assigned",
           title: "New Dispatch Assigned 📋",
@@ -607,11 +628,13 @@ router.post(
     }
 
     // Notify waste reporter about collection
-    await notificationQueue.add("send-notification", {
+    await notificationQueue.add('send-notification', {
       userId: dispatch.dispatch_wasteAnalysis.waste_analysedBy,
       type: "cleanup_verified",
       title: "Waste Collected Successfully! 🎉",
-      message: `Your reported waste has been collected. You've earned ${pointsAwarded} points! Total points: ${updatedUser.user_points}`,
+      message: `Your reported waste has been collected. You've earned ${pointsAwarded} points! Total points: ${
+        updatedUser.user_points
+      }`,
       entityType: "dispatch",
       entityId: id,
       priority: "high",
@@ -631,7 +654,7 @@ router.post(
     });
 
     const adminNotifications = admins.map((admin) =>
-      notificationQueue.add("send-notification", {
+      notificationQueue.add('send-notification', {
         userId: admin.user_id,
         type: "dispatch_update",
         title: "Dispatch Completed ✅",
