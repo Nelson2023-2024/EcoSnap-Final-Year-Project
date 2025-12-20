@@ -76,7 +76,7 @@ export function useCreateCollector() {
       firstName: string;
       lastName: string;
       assignedTeam: string;
-      password: string; // ✅ Add password field
+      password: string;
     }) => {
       const response = await fetch(`${API_URL}/user`, {
         method: "POST",
@@ -122,7 +122,11 @@ export function useUpdateUser() {
       firstName?: string;
       lastName?: string;
       email?: string;
+      username?: string;
       phoneNumber?: string;
+      password?: string;
+      points?: number;
+      role?: string;
       assignedTeams?: string[];
     }) => {
       const response = await fetch(`${API_URL}/user/${id}`, {
@@ -147,7 +151,6 @@ export function useUpdateUser() {
       queryClient.invalidateQueries({ queryKey: ["user", data.user_id] });
       toast.success("User updated successfully!");
 
-      // ✅ Invalidate notifications directly
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
@@ -181,7 +184,6 @@ export function useDeleteUser() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       toast.success("User deleted successfully!");
 
-      // ✅ Invalidate notifications directly
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notification-stats"] });

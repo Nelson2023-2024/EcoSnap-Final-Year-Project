@@ -265,7 +265,17 @@ router.put(
   "/:id",
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { firstName, lastName, email, phoneNumber, assignedTeams } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      username,
+      password,
+      points,
+      role,
+      assignedTeams,
+    } = req.body;
 
     const collector = await prisma.user.findUnique({
       where: { user_id: id },
@@ -278,8 +288,8 @@ router.put(
       },
     });
 
-    if (!collector || collector.user_role !== "collector") {
-      return res.status(404).json({ message: "Collector not found" });
+    if (!collector) {
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Check if email is already in use
@@ -289,6 +299,16 @@ router.put(
       });
       if (emailTaken) {
         return res.status(400).json({ message: "Email already in use" });
+      }
+    }
+
+    // Check if username is already in use
+    if (username && username !== collector.user_username) {
+      const usernameTaken = await prisma.user.findUnique({
+        where: { user_username: username },
+      });
+      if (usernameTaken) {
+        return res.status(400).json({ message: "Username already in use" });
       }
     }
 
@@ -302,7 +322,23 @@ router.put(
       }`.trim();
     }
     if (email) updateData.user_email = email;
+    if (username) updateData.user_username = username;
     if (phoneNumber !== undefined) updateData.user_phoneNumber = phoneNumber;
+    if (points !== undefined) updateData.user_points = parseInt(points);
+    if (role && ["user", "admin", "collector"].includes(role)) {
+      updateData.user_role = role;
+    }
+
+    // Hash password if provided
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({
+          message: "Password must be at least 6 characters long",
+        });
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updateData.user_password = hashedPassword;
+    }
 
     // Handle team assignment changes
     let teamsChanged = false;
@@ -335,7 +371,7 @@ router.put(
     // Update in transaction
     const result = await prisma.$transaction(async (tx) => {
       // Update user
-      const updatedCollector = await tx.user.update({
+      const updatedUser = await tx.user.update({
         where: { user_id: id },
         data: updateData,
       });
@@ -358,13 +394,27 @@ router.put(
         }
       }
 
-      return updatedCollector;
+      return updatedUser;
     });
 
-    // Get updated collector with populated teams
-    const updatedCollector = await prisma.user.findUnique({
+    // Get updated user with populated teams
+    const updatedUser = await prisma.user.findUnique({
       where: { user_id: id },
-      include: {
+      select: {
+        user_id: true,
+        user_firstName: true,
+        user_lastName: true,
+        user_fullName: true,
+        user_email: true,
+        user_username: true,
+        user_phoneNumber: true,
+        user_profileImage: true,
+        user_points: true,
+        user_googleID: true,
+        user_authProvider: true,
+        user_role: true,
+        user_createdAt: true,
+        user_updatedAt: true,
         user_assignedTeams: {
           include: {
             team: {
@@ -380,40 +430,76 @@ router.put(
       },
     });
 
-    // Notify admins and collectors about the update
-    const adminsAndCollectors = await prisma.user.findMany({
+    // Notify admins and affected user about the update
+    const admins = await prisma.user.findMany({
       where: {
-        user_role: {
-          in: ["admin", "collector"],
-        },
+        user_role: "admin",
+        user_id: { not: req.user.user_id }, // Exclude the admin making the change
       },
       select: { user_id: true },
     });
 
+    // Track what changed
     const changes = [];
-    if (firstName && firstName !== collector.user_firstName) changes.push("name");
+    if (firstName && firstName !== collector.user_firstName)
+      changes.push("name");
+    if (lastName && lastName !== collector.user_lastName) changes.push("name");
     if (email && email !== collector.user_email) changes.push("email");
+    if (username && username !== collector.user_username)
+      changes.push("username");
     if (phoneNumber && phoneNumber !== collector.user_phoneNumber)
       changes.push("phone");
+    if (password) changes.push("password");
+    if (points !== undefined && points !== collector.user_points)
+      changes.push("points");
+    if (role && role !== collector.user_role) changes.push("role");
     if (teamsChanged) changes.push("team assignment");
 
     if (changes.length > 0) {
-      const notifications = adminsAndCollectors.map((user) =>
+      // Notify the user whose account was updated
+      const userNotification = prisma.notification.create({
+        data: {
+          notification_userId: id,
+          notification_entityType: "user",
+          notification_entityId: id,
+          notification_type: "system",
+          notification_title: "Your Account Has Been Updated 🔄",
+          notification_message: `An administrator has updated your account. Changes: ${changes.join(
+            ", "
+          )}.${teamsChanged ? ` New teams: ${newTeamNames.join(", ")}` : ""}`,
+          notification_priority: "high",
+          notification_metadata: {
+            userId: id,
+            updatedBy: req.user.user_id,
+            updatedByName: req.user.user_fullName,
+            action: "account_updated",
+            changes,
+            newTeams: assignedTeams || [],
+          },
+        },
+      });
+
+      // Notify other admins
+      const adminNotifications = admins.map((admin) =>
         prisma.notification.create({
           data: {
-            notification_userId: user.user_id,
+            notification_userId: admin.user_id,
             notification_entityType: "user",
             notification_entityId: id,
-            notification_type: "team_update",
-            notification_title: "Collector Updated 🔄",
-            notification_message: `${updatedCollector.user_fullName}'s profile has been updated. Changes: ${changes.join(
+            notification_type: "system",
+            notification_title: "User Account Updated 🔄",
+            notification_message: `${
+              req.user.user_fullName
+            } updated ${updatedUser.user_fullName}'s account. Changes: ${changes.join(
               ", "
             )}.${teamsChanged ? ` New teams: ${newTeamNames.join(", ")}` : ""}`,
             notification_priority: "normal",
             notification_metadata: {
               userId: id,
-              collectorName: updatedCollector.user_fullName,
-              action: "collector_updated",
+              userName: updatedUser.user_fullName,
+              updatedBy: req.user.user_id,
+              updatedByName: req.user.user_fullName,
+              action: "account_updated",
               changes,
               newTeams: assignedTeams || [],
             },
@@ -421,13 +507,14 @@ router.put(
         })
       );
 
-      await Promise.all(notifications);
+      await Promise.all([userNotification, ...adminNotifications]);
     }
 
     res.status(200).json({
       success: true,
-      data: updatedCollector,
-      notified: changes.length > 0 ? adminsAndCollectors.length : 0,
+      data: updatedUser,
+      notified: changes.length > 0 ? admins.length + 1 : 0,
+      changes,
     });
   })
 );

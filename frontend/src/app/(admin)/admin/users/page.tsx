@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Award, UserCog, Plus, Trash2, Edit, LoaderIcon } from "lucide-react";
+import { Search, Award, UserCog, Plus, Trash2, Edit, LoaderIcon, Eye, EyeOff } from "lucide-react";
 import { useUsers, useCreateCollector, useDeleteUser, useUpdateUser } from "@/hooks/useUser";
 import { useTeams } from "@/hooks/useTeams";
 import { toast } from "react-hot-toast";
@@ -58,8 +58,13 @@ export default function Users() {
   const [updateFirstName, setUpdateFirstName] = React.useState("");
   const [updateLastName, setUpdateLastName] = React.useState("");
   const [updateEmail, setUpdateEmail] = React.useState("");
+  const [updateUsername, setUpdateUsername] = React.useState("");
   const [updatePhoneNumber, setUpdatePhoneNumber] = React.useState("");
+  const [updatePassword, setUpdatePassword] = React.useState("");
+  const [updatePoints, setUpdatePoints] = React.useState("");
+  const [updateRole, setUpdateRole] = React.useState("");
   const [updateAssignedTeams, setUpdateAssignedTeams] = React.useState<string[]>([]);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const filteredUsers = users?.filter((user: any) => {
     const matchesSearch =
@@ -90,8 +95,8 @@ export default function Users() {
     }
 
     // Password validation
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters long");
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
       return;
     }
 
@@ -129,7 +134,11 @@ export default function Users() {
     setUpdateFirstName(user.user_firstName || "");
     setUpdateLastName(user.user_lastName || "");
     setUpdateEmail(user.user_email || "");
+    setUpdateUsername(user.user_username || "");
     setUpdatePhoneNumber(user.user_phoneNumber || "");
+    setUpdatePassword("");
+    setUpdatePoints(user.user_points?.toString() || "0");
+    setUpdateRole(user.user_role || "user");
     setUpdateAssignedTeams(user.user_assignedTeams?.map((t: any) => t.team_id) || []);
     setUpdateDialogOpen(true);
   };
@@ -137,22 +146,40 @@ export default function Users() {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!updateFirstName || !updateLastName || !updateEmail) {
-      toast.error("First name, last name, and email are required");
+    if (!updateFirstName || !updateLastName || !updateEmail || !updateUsername) {
+      toast.error("First name, last name, email, and username are required");
+      return;
+    }
+
+    // Password validation if provided
+    if (updatePassword && updatePassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
       return;
     }
 
     try {
-      await updateUserMutation.mutateAsync({
+      const updateData: any = {
         id: selectedUser.user_id,
         firstName: updateFirstName,
         lastName: updateLastName,
         email: updateEmail,
+        username: updateUsername,
         phoneNumber: updatePhoneNumber,
+        points: parseInt(updatePoints) || 0,
+        role: updateRole,
         assignedTeams: updateAssignedTeams,
-      });
+      };
+
+      // Only include password if it's not empty
+      if (updatePassword) {
+        updateData.password = updatePassword;
+      }
+
+      await updateUserMutation.mutateAsync(updateData);
       setUpdateDialogOpen(false);
       setSelectedUser(null);
+      setUpdatePassword("");
+      setShowPassword(false);
     } catch (err) {
       // Error is already handled in the hook
     }
@@ -249,13 +276,13 @@ export default function Users() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter password (min 8 characters)"
+                  placeholder="Enter password (min 6 characters)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  minLength={8}
+                  minLength={6}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Password must be at least 8 characters long
+                  Password must be at least 6 characters long
                 </p>
               </div>
 
@@ -430,7 +457,7 @@ export default function Users() {
 
       {/* Update User Dialog */}
       <Dialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update User</DialogTitle>
             <DialogDescription>
@@ -441,34 +468,48 @@ export default function Users() {
           <form className="grid gap-4" onSubmit={handleUpdateUser}>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-3">
-                <Label htmlFor="update-firstName">First Name</Label>
+                <Label htmlFor="update-firstName">First Name *</Label>
                 <Input
                   id="update-firstName"
                   placeholder="Enter first name"
                   value={updateFirstName}
                   onChange={(e) => setUpdateFirstName(e.target.value)}
+                  required
                 />
               </div>
 
               <div className="grid gap-3">
-                <Label htmlFor="update-lastName">Last Name</Label>
+                <Label htmlFor="update-lastName">Last Name *</Label>
                 <Input
                   id="update-lastName"
                   placeholder="Enter last name"
                   value={updateLastName}
                   onChange={(e) => setUpdateLastName(e.target.value)}
+                  required
                 />
               </div>
             </div>
 
             <div className="grid gap-3">
-              <Label htmlFor="update-email">Email</Label>
+              <Label htmlFor="update-email">Email *</Label>
               <Input
                 id="update-email"
                 type="email"
                 placeholder="Enter email"
                 value={updateEmail}
                 onChange={(e) => setUpdateEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid gap-3">
+              <Label htmlFor="update-username">Username *</Label>
+              <Input
+                id="update-username"
+                placeholder="Enter username"
+                value={updateUsername}
+                onChange={(e) => setUpdateUsername(e.target.value)}
+                required
               />
             </div>
 
@@ -482,7 +523,67 @@ export default function Users() {
               />
             </div>
 
-            {selectedUser?.user_role === "collector" && (
+            <div className="grid gap-3">
+              <Label htmlFor="update-password">
+                New Password (Leave empty to keep current)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="update-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter new password (min 6 characters)"
+                  value={updatePassword}
+                  onChange={(e) => setUpdatePassword(e.target.value)}
+                  minLength={6}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Password must be at least 6 characters long
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3">
+                <Label htmlFor="update-points">Points</Label>
+                <Input
+                  id="update-points"
+                  type="number"
+                  placeholder="Enter points"
+                  value={updatePoints}
+                  onChange={(e) => setUpdatePoints(e.target.value)}
+                  min="0"
+                />
+              </div>
+
+              <div className="grid gap-3">
+                <Label htmlFor="update-role">Role</Label>
+                <Select value={updateRole} onValueChange={setUpdateRole}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="collector">Collector</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {(selectedUser?.user_role === "collector" || updateRole === "collector") && (
               <div className="grid gap-3">
                 <Label>Assigned Teams</Label>
                 <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
@@ -510,7 +611,7 @@ export default function Users() {
 
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button variant="outline" type="button">Cancel</Button>
               </DialogClose>
               <Button type="submit" disabled={updateUserMutation.isPending}>
                 {updateUserMutation.isPending ? "Updating..." : "Update"}
