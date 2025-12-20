@@ -1,24 +1,24 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { FileText, Download, Loader2 } from 'lucide-react';
-import { useAdminDashboard } from '@/hooks/useAdminDashboard';
+} from "@/components/ui/select";
+import { FileText, Download, Loader2 } from "lucide-react";
+import { useAdminDashboard } from "@/hooks/useAdminDashboard";
 
 const AdminReportGenerator = () => {
-  const [reportType, setReportType] = useState('monthly');
+  const [reportType, setReportType] = useState("monthly");
   const [isGenerating, setIsGenerating] = useState(false);
   const { data, isLoading } = useAdminDashboard();
 
@@ -29,31 +29,31 @@ const AdminReportGenerator = () => {
 
     try {
       // Create a new window for the report
-      const reportWindow = window.open('', '_blank');
+      const reportWindow = window.open("", "_blank");
       if (!reportWindow) {
-        alert('Please allow pop-ups to generate the report');
+        alert("Please allow pop-ups to generate the report");
         setIsGenerating(false);
         return;
       }
 
       // Get current date for report
-      const reportDate = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+      const reportDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
 
       // Calculate period
-      let period = '';
-      if (reportType === 'weekly') period = 'Last 7 Days';
-      else if (reportType === 'monthly') period = 'Last 30 Days';
-      else period = 'Last 90 Days';
+      let period = "";
+      if (reportType === "weekly") period = "Last 7 Days";
+      else if (reportType === "monthly") period = "Last 30 Days";
+      else period = "Last 90 Days";
 
       // Prepare chart data
       const wasteTypesChart = data.wasteTypeDistribution
         .slice(0, 5)
         .map((item) => `${item.name}: ${item.value}`)
-        .join(', ');
+        .join(", ");
 
       const topTeam = data.teamPerformance[0];
       const topUser = data.topUsers[0];
@@ -386,7 +386,9 @@ const AdminReportGenerator = () => {
               </div>
               <div>
                 <div class="label">Report Type</div>
-                <div class="value">${reportType.charAt(0).toUpperCase() + reportType.slice(1)}</div>
+                <div class="value">${
+                  reportType.charAt(0).toUpperCase() + reportType.slice(1)
+                }</div>
               </div>
             </div>
             
@@ -403,25 +405,33 @@ const AdminReportGenerator = () => {
                 <div class="stat-card">
                   <div class="label">Total Reports</div>
                   <div class="value">${data.overview.totalReports.value.toLocaleString()}</div>
-                  <div class="change ${data.overview.totalReports.trend}">${data.overview.totalReports.change}</div>
+                  <div class="change ${data.overview.totalReports.trend}">${
+        data.overview.totalReports.change
+      }</div>
                 </div>
                 
                 <div class="stat-card">
                   <div class="label">Active Users</div>
                   <div class="value">${data.overview.activeUsers.value.toLocaleString()}</div>
-                  <div class="change ${data.overview.activeUsers.trend}">${data.overview.activeUsers.change}</div>
+                  <div class="change ${data.overview.activeUsers.trend}">${
+        data.overview.activeUsers.change
+      }</div>
                 </div>
                 
                 <div class="stat-card">
                   <div class="label">Dispatched Trucks</div>
                   <div class="value">${data.overview.dispatchedTrucks.value.toLocaleString()}</div>
-                  <div class="change ${data.overview.dispatchedTrucks.trend}">${data.overview.dispatchedTrucks.change}</div>
+                  <div class="change ${data.overview.dispatchedTrucks.trend}">${
+        data.overview.dispatchedTrucks.change
+      }</div>
                 </div>
                 
                 <div class="stat-card">
                   <div class="label">Collections</div>
                   <div class="value">${data.overview.completedCollections.value.toLocaleString()}</div>
-                  <div class="change ${data.overview.completedCollections.trend}">${data.overview.completedCollections.change}</div>
+                  <div class="change ${
+                    data.overview.completedCollections.trend
+                  }">${data.overview.completedCollections.change}</div>
                 </div>
               </div>
             </div>
@@ -433,12 +443,16 @@ const AdminReportGenerator = () => {
               <div class="metrics-grid">
                 <div class="metric-card">
                   <div class="metric-label">Avg Response Time</div>
-                  <div class="metric-value">${data.overview.avgResponseTime.toFixed(1)}h</div>
+                  <div class="metric-value">${data.overview.avgResponseTime.toFixed(
+                    1
+                  )}h</div>
                 </div>
                 
                 <div class="metric-card">
                   <div class="metric-label">Collection Rate</div>
-                  <div class="metric-value">${data.overview.collectionRate}%</div>
+                  <div class="metric-value">${
+                    data.overview.collectionRate
+                  }%</div>
                 </div>
                 
                 <div class="metric-card">
@@ -450,8 +464,12 @@ const AdminReportGenerator = () => {
               <div class="highlight-box">
                 <div class="title">Key Performance Indicator</div>
                 <div class="content">
-                  The system maintains an average response time of ${data.overview.avgResponseTime.toFixed(1)} hours 
-                  from report submission to dispatch assignment, with a ${data.overview.collectionRate}% collection success rate.
+                  The system maintains an average response time of ${data.overview.avgResponseTime.toFixed(
+                    1
+                  )} hours 
+                  from report submission to dispatch assignment, with a ${
+                    data.overview.collectionRate
+                  }% collection success rate.
                 </div>
               </div>
             </div>
@@ -463,10 +481,14 @@ const AdminReportGenerator = () => {
               <div class="chart-container">
                 <div class="chart-title">Top Waste Categories Identified</div>
                 <div class="bar-chart">
-                  ${data.wasteTypeDistribution.slice(0, 5).map((item, index) => {
-                    const maxValue = Math.max(...data.wasteTypeDistribution.map(i => i.value));
-                    const percentage = (item.value / maxValue) * 100;
-                    return `
+                  ${data.wasteTypeDistribution
+                    .slice(0, 5)
+                    .map((item, index) => {
+                      const maxValue = Math.max(
+                        ...data.wasteTypeDistribution.map((i) => i.value)
+                      );
+                      const percentage = (item.value / maxValue) * 100;
+                      return `
                       <div class="bar-item">
                         <div class="bar-label">${item.name}</div>
                         <div class="bar-container">
@@ -475,7 +497,8 @@ const AdminReportGenerator = () => {
                         <div class="bar-value">${item.value}</div>
                       </div>
                     `;
-                  }).join('')}
+                    })
+                    .join("")}
                 </div>
               </div>
               
@@ -489,14 +512,21 @@ const AdminReportGenerator = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${data.wasteByCategory.slice(0, 5).map(cat => `
+                  ${data.wasteByCategory
+                    .slice(0, 5)
+                    .map(
+                      (cat) => `
                     <tr>
-                      <td style="text-transform: capitalize;">${cat.category || 'General'}</td>
+                      <td style="text-transform: capitalize;">${
+                        cat.category || "General"
+                      }</td>
                       <td>${cat.count}</td>
                       <td>${cat.totalVolume.toFixed(1)} units</td>
                       <td><span class="status-badge collected">Tracked</span></td>
                     </tr>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </tbody>
               </table>
             </div>
@@ -511,7 +541,11 @@ const AdminReportGenerator = () => {
               <div class="highlight-box">
                 <div class="title">Top Performing Team</div>
                 <div class="content">
-                  ${topTeam ? `${topTeam.teamName} (${topTeam.specialization}) - ${topTeam.totalDispatches} dispatches completed with ${topTeam.memberCount} members` : 'No data available'}
+                  ${
+                    topTeam
+                      ? `${topTeam.teamName} (${topTeam.specialization}) - ${topTeam.totalDispatches} dispatches completed with ${topTeam.memberCount} members`
+                      : "No data available"
+                  }
                 </div>
               </div>
               
@@ -527,16 +561,25 @@ const AdminReportGenerator = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${data.teamPerformance.slice(0, 5).map(team => `
+                  ${data.teamPerformance
+                    .slice(0, 5)
+                    .map(
+                      (team) => `
                     <tr>
                       <td>${team.teamName}</td>
-                      <td style="text-transform: capitalize;">${team.specialization}</td>
+                      <td style="text-transform: capitalize;">${
+                        team.specialization
+                      }</td>
                       <td>${team.totalDispatches}</td>
                       <td>${team.memberCount}</td>
                       <td>${team.truckCount}</td>
-                      <td><span class="status-badge ${team.status === 'active' ? 'collected' : 'pending'}">${team.status}</span></td>
+                      <td><span class="status-badge ${
+                        team.status === "active" ? "collected" : "pending"
+                      }">${team.status}</span></td>
                     </tr>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </tbody>
               </table>
             </div>
@@ -548,7 +591,15 @@ const AdminReportGenerator = () => {
               <div class="highlight-box">
                 <div class="title">Top Contributor</div>
                 <div class="content">
-                  ${topUser ? `${topUser.name || topUser.email} - ${topUser.points.toLocaleString()} points earned from ${topUser.reportCount} waste reports` : 'No data available'}
+                  ${
+                    topUser
+                      ? `${
+                          topUser.name || topUser.email
+                        } - ${topUser.points.toLocaleString()} points earned from ${
+                          topUser.reportCount
+                        } waste reports`
+                      : "No data available"
+                  }
                 </div>
               </div>
               
@@ -562,14 +613,19 @@ const AdminReportGenerator = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${data.topUsers.slice(0, 10).map((user, index) => `
+                  ${data.topUsers
+                    .slice(0, 10)
+                    .map(
+                      (user, index) => `
                     <tr>
                       <td>${index + 1}</td>
                       <td>${user.name || user.email}</td>
                       <td>${user.reportCount}</td>
                       <td style="font-weight: 600; color: #10b981;">${user.points.toLocaleString()}</td>
                     </tr>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </tbody>
               </table>
             </div>
@@ -581,38 +637,61 @@ const AdminReportGenerator = () => {
               <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
                 <div>
                   <h3 style="font-size: 14px; color: #666; margin-bottom: 10px;">Waste Status</h3>
-                  ${data.wasteStatus.map(status => `
+                  ${data.wasteStatus
+                    .map(
+                      (status) => `
                     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(/_/g, ' ')}</span>
+                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(
+                        /_/g,
+                        " "
+                      )}</span>
                       <span style="font-weight: 600;">${status.count}</span>
                     </div>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </div>
                 
                 <div>
                   <h3 style="font-size: 14px; color: #666; margin-bottom: 10px;">Dispatch Status</h3>
-                  ${data.dispatchStatus.map(status => `
+                  ${data.dispatchStatus
+                    .map(
+                      (status) => `
                     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(/_/g, ' ')}</span>
+                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(
+                        /_/g,
+                        " "
+                      )}</span>
                       <span style="font-weight: 600;">${status.count}</span>
                     </div>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </div>
                 
                 <div>
                   <h3 style="font-size: 14px; color: #666; margin-bottom: 10px;">Truck Status</h3>
-                  ${data.truckStatus.map(status => `
+                  ${data.truckStatus
+                    .map(
+                      (status) => `
                     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(/_/g, ' ')}</span>
+                      <span style="font-size: 13px; text-transform: capitalize;">${status.status.replace(
+                        /_/g,
+                        " "
+                      )}</span>
                       <span style="font-weight: 600;">${status.count}</span>
                     </div>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </div>
               </div>
             </div>
             
             <!-- Location Hotspots -->
-            ${data.locationHotspots.length > 0 ? `
+            ${
+              data.locationHotspots.length > 0
+                ? `
             <div class="section">
               <h2 class="section-title">Location Hotspots</h2>
               <p style="margin-bottom: 15px; color: #666; font-size: 14px;">
@@ -629,18 +708,29 @@ const AdminReportGenerator = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${data.locationHotspots.slice(0, 5).map(spot => `
+                  ${data.locationHotspots
+                    .slice(0, 5)
+                    .map(
+                      (spot) => `
                     <tr>
                       <td>${spot.location}</td>
-                      <td style="font-weight: 600; color: #ef4444;">${spot.reportCount}</td>
-                      <td style="text-transform: capitalize;">${spot.category || 'Mixed'}</td>
+                      <td style="font-weight: 600; color: #ef4444;">${
+                        spot.reportCount
+                      }</td>
+                      <td style="text-transform: capitalize;">${
+                        spot.category || "Mixed"
+                      }</td>
                       <td>${new Date(spot.lastReport).toLocaleDateString()}</td>
                     </tr>
-                  `).join('')}
+                  `
+                    )
+                    .join("")}
                 </tbody>
               </table>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
             
             <!-- Recommendations -->
             <div class="section">
@@ -684,8 +774,8 @@ const AdminReportGenerator = () => {
       reportWindow.document.write(htmlContent);
       reportWindow.document.close();
     } catch (error) {
-      console.error('Error generating report:', error);
-      alert('Failed to generate report. Please try again.');
+      console.error("Error generating report:", error);
+      alert("Failed to generate report. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -693,12 +783,10 @@ const AdminReportGenerator = () => {
 
   return (
     <Card className="w-full">
-            <CardHeader>
-        <CardTitle>
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-eco-primary" />
-            Generate System Report
-          </div>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-eco-primary" />
+          Generate System Report
         </CardTitle>
         <CardDescription>
           Create comprehensive PDF reports for waste management analytics
@@ -713,9 +801,15 @@ const AdminReportGenerator = () => {
                 <SelectValue placeholder="Select period" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="weekly">Weekly Report (Last 7 Days)</SelectItem>
-                <SelectItem value="monthly">Monthly Report (Last 30 Days)</SelectItem>
-                <SelectItem value="quarterly">Quarterly Report (Last 90 Days)</SelectItem>
+                <SelectItem value="weekly">
+                  Weekly Report (Last 7 Days)
+                </SelectItem>
+                <SelectItem value="monthly">
+                  Monthly Report (Last 30 Days)
+                </SelectItem>
+                <SelectItem value="quarterly">
+                  Quarterly Report (Last 90 Days)
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

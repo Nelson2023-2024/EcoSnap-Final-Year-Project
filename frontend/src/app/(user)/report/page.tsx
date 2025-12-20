@@ -134,14 +134,6 @@ const ReportWaste = () => {
         longitude: lng,
         address: location,
       },
-      {
-        onSuccess: () => {
-          setImageFile(null);
-          setImagePreview(null);
-          setLocation("");
-          setGpsLocation(null);
-        },
-      }
     );
   };
 
