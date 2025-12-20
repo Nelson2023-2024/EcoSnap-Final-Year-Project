@@ -120,6 +120,7 @@ export function useUpdateTruck() {
   return useMutation({
     mutationFn: async ({
       id,
+      image,
       ...updateData
     }: {
       id: string;
@@ -128,31 +129,67 @@ export function useUpdateTruck() {
       capacity?: number;
       status?: string;
       assignedTeam?: string;
-      imageURL?: string;
+      image?: File; // Add image support
     }) => {
-      const response = await fetch(`${API_URL}/truck/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(updateData),
-      });
+      // Use FormData if image is provided
+      if (image) {
+        const formData = new FormData();
+        
+        if (updateData.registrationNumber) {
+          formData.append("registrationNumber", updateData.registrationNumber);
+        }
+        if (updateData.truckType) {
+          formData.append("truckType", updateData.truckType);
+        }
+        if (updateData.capacity !== undefined) {
+          formData.append("capacity", updateData.capacity.toString());
+        }
+        if (updateData.status) {
+          formData.append("status", updateData.status);
+        }
+        if (updateData.assignedTeam !== undefined) {
+          formData.append("assignedTeam", updateData.assignedTeam);
+        }
+        formData.append("image", image);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update truck");
+        const response = await fetch(`${API_URL}/truck/${id}`, {
+          method: "PUT",
+          credentials: "include",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update truck");
+        }
+
+        const data = await response.json();
+        return data.data as Truck;
+      } else {
+        // Use JSON if no image
+        const response = await fetch(`${API_URL}/truck/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(updateData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update truck");
+        }
+
+        const data = await response.json();
+        return data.data as Truck;
       }
-
-      const data = await response.json();
-      return data.data as Truck;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       queryClient.invalidateQueries({ queryKey: ["truck", data.truck_id] });
       toast.success("Truck updated successfully!");
 
-      // ✅ Invalidate notifications directly
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notification-stats"] });

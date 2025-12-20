@@ -43,8 +43,9 @@ export default function Trucks() {
   const deleteTruckMutation = useDeleteTruck();
   const updateTruckMutation = useUpdateTruck();
 
-  // File input ref
+  // File input refs
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const updateFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -63,6 +64,8 @@ export default function Trucks() {
   const [updateCapacity, setUpdateCapacity] = React.useState("");
   const [updateStatus, setUpdateStatus] = React.useState<TruckStatus>("available");
   const [updateAssignedTeam, setUpdateAssignedTeam] = React.useState<string>("");
+  const [updateImageFile, setUpdateImageFile] = React.useState<File | null>(null);
+  const [updateImagePreview, setUpdateImagePreview] = React.useState<string>("");
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,6 +87,26 @@ export default function Trucks() {
     }
   };
 
+  const handleUpdateImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size should be less than 5MB");
+        return;
+      }
+      setUpdateImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUpdateImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreview("");
@@ -92,8 +115,20 @@ export default function Trucks() {
     }
   };
 
+  const handleRemoveUpdateImage = () => {
+    setUpdateImageFile(null);
+    setUpdateImagePreview("");
+    if (updateFileInputRef.current) {
+      updateFileInputRef.current.value = "";
+    }
+  };
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
+  };
+
+  const triggerUpdateFileInput = () => {
+    updateFileInputRef.current?.click();
   };
 
   const handleCreateTruck = async (e: React.FormEvent) => {
@@ -148,6 +183,11 @@ export default function Trucks() {
     setUpdateCapacity(truck.truck_capacity.toString());
     setUpdateStatus(truck.truck_status);
     setUpdateAssignedTeam(truck.truck_assignedTeamId || "none");
+    setUpdateImageFile(null);
+    setUpdateImagePreview("");
+    if (updateFileInputRef.current) {
+      updateFileInputRef.current.value = "";
+    }
     setUpdateDialogOpen(true);
   };
 
@@ -167,9 +207,12 @@ export default function Trucks() {
         capacity: Number(updateCapacity),
         status: updateStatus,
         assignedTeam: updateAssignedTeam && updateAssignedTeam !== "none" ? updateAssignedTeam : undefined,
+        image: updateImageFile || undefined,
       });
       setUpdateDialogOpen(false);
       setSelectedTruck(null);
+      setUpdateImageFile(null);
+      setUpdateImagePreview("");
     } catch (err) {
       // Error is already handled in the hook
     }
@@ -501,6 +544,72 @@ export default function Trucks() {
           </DialogHeader>
 
           <form className="grid gap-4" onSubmit={handleUpdateSubmit}>
+            {/* Image Update Section */}
+            <div className="grid gap-3">
+              <Label>Truck Image (Optional)</Label>
+              <div className="flex flex-col gap-3">
+                {updateImagePreview ? (
+                  <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+                    <Image
+                      src={updateImagePreview}
+                      alt="New truck image"
+                      fill
+                      className="object-cover"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={handleRemoveUpdateImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : selectedTruck?.truck_imageURL ? (
+                  <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+                    <Image
+                      src={selectedTruck.truck_imageURL}
+                      alt="Current truck image"
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={triggerUpdateFileInput}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Change Image
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                    onClick={triggerUpdateFileInput}
+                  >
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload new truck image
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      PNG, JPG up to 5MB
+                    </p>
+                  </div>
+                )}
+                <Input
+                  ref={updateFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUpdateImageChange}
+                />
+              </div>
+            </div>
+
             <div className="grid gap-3">
               <Label htmlFor="update-registrationNumber">Registration Number</Label>
               <Input
