@@ -4,6 +4,7 @@ import passport from "passport";
 import "../passport/google.auth.js";
 import { isAuthenticated } from "../middleware/auth.middleware.js";
 import { ENV } from "../config/env.config.js";
+import { prisma } from "../config/prisma.config.js"; // ✅ ADD THIS IMPORT
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.get(
     console.log("Authenticated user:", req.user);
 
     const redirectURL =
-      req.user.role === "admin"
+      req.user.user_role === "admin"
         ? `${ENV.FRONTEND_URL}/admin`
         : `${ENV.FRONTEND_URL}/user-dashboard`;
     // Redirect to frontend after successful login
@@ -68,6 +69,79 @@ router.get("/dev-login", async (req, res) => {
     res.json({ message: "Dev login successful", user });
   });
 });
+
+// Update authenticated user's profile
+router.put(
+  "/profile",
+  isAuthenticated,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.user_id;
+
+    const { firstName, lastName, username, phoneNumber, profileImage } =
+      req.body;
+
+    // Build update object dynamically (prevents overwriting with undefined)
+    const updateData = {};
+
+    if (firstName !== undefined) updateData.user_firstName = firstName;
+    if (lastName !== undefined) updateData.user_lastName = lastName;
+    if (username !== undefined) updateData.user_username = username;
+    if (phoneNumber !== undefined) updateData.user_phoneNumber = phoneNumber;
+    if (profileImage !== undefined)
+      updateData.user_profileImage = profileImage;
+
+    // ✅ Auto-generate fullName if first/last name changed
+    if (firstName !== undefined || lastName !== undefined) {
+      const newFirstName = firstName !== undefined ? firstName : req.user.user_firstName;
+      const newLastName = lastName !== undefined ? lastName : req.user.user_lastName;
+      updateData.user_fullName = `${newFirstName || ""} ${newLastName || ""}`.trim();
+    }
+
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { user_id: userId },
+        data: updateData,
+      });
+
+      // ✅ Update session with new user data
+      req.user = updatedUser;
+
+      // Transform to frontend format
+      const transformedUser = {
+        user_id: updatedUser.user_id,
+        email: updatedUser.user_email,
+        username: updatedUser.user_username,
+        firstName: updatedUser.user_firstName,
+        lastName: updatedUser.user_lastName,
+        fullName: updatedUser.user_fullName,
+        profileImage: updatedUser.user_profileImage,
+        phoneNumber: updatedUser.user_phoneNumber,
+        role: updatedUser.user_role,
+        points: updatedUser.user_points,
+        googleID: updatedUser.user_googleID,
+        authProvider: updatedUser.user_authProvider,
+        createdAt: updatedUser.user_createdAt,
+        updatedAt: updatedUser.user_updatedAt,
+      };
+
+      res.json({
+        success: true,
+        message: "Profile updated successfully",
+        user: transformedUser,
+      });
+    } catch (error) {
+      // Handle unique constraint errors
+      if (error.code === "P2002") {
+        return res.status(400).json({
+          success: false,
+          message: `${error.meta.target[0]} already in use`,
+        });
+      }
+
+      throw error;
+    }
+  })
+);
 
 router.post("/logout", (req, res, next) => {
   req.logout(function (error) {

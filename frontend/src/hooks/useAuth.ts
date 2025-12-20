@@ -146,3 +146,50 @@ export function useAuthCollector() {
 
   return query;
 }
+
+// Update authenticated user's profile
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+
+  const { mutate: updateProfile, isPending: isUpdating } = useMutation({
+    mutationFn: async (payload: {
+      firstName?: string;
+      lastName?: string;
+      username?: string;
+      phoneNumber?: string;
+      profileImage?: string;
+    }) => {
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update profile");
+      }
+
+      return response.json();
+    },
+
+    onSuccess: (data) => {
+      // Update cached auth user immediately
+      queryClient.setQueryData(["authUser"], data.user);
+
+      // Ensure consistency across app
+      queryClient.invalidateQueries({ queryKey: ["authUser"] });
+
+      toast.success("Profile updated successfully!");
+    },
+
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update profile");
+    },
+  });
+
+  return { updateProfile, isUpdating };
+}
