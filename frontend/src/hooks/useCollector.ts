@@ -4,11 +4,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
 // Types
-export interface TeamAssignment {
+export interface TeamInfo {
   teamId: string;
   teamName: string;
   specialization: string;
   status: string;
+  createdAt: string;
+  updatedAt: string;
   trucks: Array<{
     truck_id: string;
     truck_registrationNumber: string;
@@ -16,16 +18,33 @@ export interface TeamAssignment {
     truck_status: string;
     truck_capacity: number;
     truck_imageURL: string;
+    truck_locationLatitude: number;
+    truck_locationLongitude: number;
   }>;
   members: Array<{
-    user: {
-      user_id: string;
-      user_fullName: string;
-      user_email: string;
-      user_role: string;
-      user_profileImage: string;
-    };
+    userId: string;
+    fullName: string;
+    email: string;
+    role: string;
+    profileImage: string;
+    phoneNumber?: string;
   }>;
+  trucksCount: number;
+  membersCount: number;
+  availableTrucks: number;
+  activeTrucks: number;
+}
+
+export interface TeamAssignment {
+  teams: TeamInfo[];
+  primaryTeam: TeamInfo;
+  summary: {
+    totalTeams: number;
+    totalTrucks: number;
+    totalMembers: number;
+    availableTrucks: number;
+    activeTrucks: number;
+  };
 }
 
 export interface Dispatch {

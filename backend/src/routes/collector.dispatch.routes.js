@@ -32,8 +32,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const userId = req.user.user_id;
 
-    // Find collector's team assignment
-    const teamMember = await prisma.teamMember.findFirst({
+    // Find all teams the collector belongs to
+    const teamMembers = await prisma.teamMember.findMany({
       where: { userId },
       include: {
         team: {
@@ -46,6 +46,8 @@ router.get(
                 truck_status: true,
                 truck_capacity: true,
                 truck_imageURL: true,
+                truck_locationLatitude: true,
+                truck_locationLongitude: true,
               },
             },
             team_members: {
@@ -57,6 +59,7 @@ router.get(
                     user_email: true,
                     user_role: true,
                     user_profileImage: true,
+                    user_phoneNumber: true,
                   },
                 },
               },
@@ -66,7 +69,7 @@ router.get(
       },
     });
 
-    if (!teamMember) {
+    if (!teamMembers || teamMembers.length === 0) {
       return res.status(404).json({
         success: false,
         message: "You are not assigned to any team yet. Please contact admin.",
@@ -74,16 +77,54 @@ router.get(
       });
     }
 
+    // Format the response
+    const teams = teamMembers.map((tm) => ({
+      teamId: tm.team.team_id,
+      teamName: tm.team.team_name,
+      specialization: tm.team.team_specialization,
+      status: tm.team.team_status,
+      createdAt: tm.team.team_createdAt,
+      updatedAt: tm.team.team_updatedAt,
+      trucks: tm.team.team_trucks,
+      members: tm.team.team_members.map((member) => ({
+        userId: member.user.user_id,
+        fullName: member.user.user_fullName,
+        email: member.user.user_email,
+        role: member.user.user_role,
+        profileImage: member.user.user_profileImage,
+        phoneNumber: member.user.user_phoneNumber,
+      })),
+      trucksCount: tm.team.team_trucks.length,
+      membersCount: tm.team.team_members.length,
+      availableTrucks: tm.team.team_trucks.filter(
+        (t) => t.truck_status === "available"
+      ).length,
+      activeTrucks: tm.team.team_trucks.filter((t) => t.truck_status === "in_use")
+        .length,
+    }));
+
+    // Calculate summary statistics
+    const summary = {
+      totalTeams: teams.length,
+      totalTrucks: teams.reduce((sum, team) => sum + team.trucksCount, 0),
+      totalMembers: teams.reduce((sum, team) => sum + team.membersCount, 0),
+      availableTrucks: teams.reduce(
+        (sum, team) => sum + team.availableTrucks,
+        0
+      ),
+      activeTrucks: teams.reduce((sum, team) => sum + team.activeTrucks, 0),
+    };
+
+    // Primary team (first one or most active)
+    const primaryTeam = teams[0];
+
     res.json({
       success: true,
-      message: "Team assignment retrieved successfully",
+      message: "Team assignments retrieved successfully",
       data: {
-        teamId: teamMember.team.team_id,
-        teamName: teamMember.team.team_name,
-        specialization: teamMember.team.team_specialization,
-        status: teamMember.team.team_status,
-        trucks: teamMember.team.team_trucks,
-        members: teamMember.team.team_members,
+        teams,
+        primaryTeam,
+        summary,
       },
     });
   })

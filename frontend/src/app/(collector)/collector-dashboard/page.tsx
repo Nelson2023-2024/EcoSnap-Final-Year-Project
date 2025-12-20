@@ -11,7 +11,7 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  LoaderIcon,
+  Loader2,
   Package,
   TrendingUp,
   Calendar,
@@ -39,7 +39,7 @@ const CollectorDashboard = () => {
         <main className="container mx-auto px-4 py-6 md:py-8">
           <div className="flex items-center justify-center h-96">
             <div className="text-center space-y-4">
-              <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
+              <Loader2 className="h-12 w-12 animate-spin text-eco-primary mx-auto" />
               <p className="text-muted-foreground">Loading your dashboard...</p>
             </div>
           </div>
@@ -69,6 +69,10 @@ const CollectorDashboard = () => {
 
   // Calculate active dispatches (assigned + en_route)
   const activeDispatchesCount = (summary.assigned ?? 0) + (summary.en_route ?? 0);
+
+  // Use primary team data
+  const primaryTeam = teamData?.primaryTeam;
+  const teamsSummary = teamData?.summary;
 
   // Stats cards
   const collectorStats = [
@@ -155,14 +159,19 @@ const CollectorDashboard = () => {
               <div>
                 <h1 className="text-3xl font-bold">Collector Dashboard</h1>
                 <p className="mt-2 text-white/90">
-                  {teamData?.teamName} • {teamData?.specialization}
+                  {primaryTeam?.teamName} • {primaryTeam?.specialization}
                 </p>
+                {teamsSummary && teamsSummary.totalTeams > 1 && (
+                  <p className="text-sm text-white/80 mt-1">
+                    Member of {teamsSummary.totalTeams} teams
+                  </p>
+                )}
               </div>
               <div className="hidden md:block">
                 <div className="flex items-center gap-2 bg-white/20 rounded-lg px-4 py-2">
                   <Truck className="h-5 w-5" />
                   <span className="font-semibold">
-                    {teamData?.trucks.filter(t => t.truck_status === "available").length} Trucks Available
+                    {teamsSummary?.availableTrucks ?? 0} Trucks Available
                   </span>
                 </div>
               </div>
@@ -196,27 +205,29 @@ const CollectorDashboard = () => {
                   <Users className="h-5 w-5 text-eco-primary" />
                   Team Members
                 </CardTitle>
-                <CardDescription>Your collection team</CardDescription>
+                <CardDescription>
+                  {primaryTeam?.teamName} ({primaryTeam?.membersCount ?? 0} members)
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {teamData?.members.map((member) => (
+                  {primaryTeam?.members.map((member) => (
                     <div
-                      key={member.user.user_id}
+                      key={member.userId}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={member.user.user_profileImage} />
+                        <AvatarImage src={member.profileImage} />
                         <AvatarFallback>
-                          {member.user.user_fullName?.charAt(0) ?? "?"}
+                          {member.fullName?.charAt(0) ?? "?"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="font-medium text-sm">{member.user.user_fullName}</p>
-                        <p className="text-xs text-muted-foreground">{member.user.user_email}</p>
+                        <p className="font-medium text-sm">{member.fullName}</p>
+                        <p className="text-xs text-muted-foreground">{member.email}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {member.user.user_role}
+                        {member.role}
                       </Badge>
                     </div>
                   ))}
@@ -231,11 +242,13 @@ const CollectorDashboard = () => {
                   <Truck className="h-5 w-5 text-eco-primary" />
                   Available Trucks
                 </CardTitle>
-                <CardDescription>Ready for dispatch</CardDescription>
+                <CardDescription>
+                  {primaryTeam?.trucksCount ?? 0} total • {primaryTeam?.availableTrucks ?? 0} available
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {teamData?.trucks.map((truck) => (
+                  {primaryTeam?.trucks.map((truck) => (
                     <div
                       key={truck.truck_id}
                       className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
