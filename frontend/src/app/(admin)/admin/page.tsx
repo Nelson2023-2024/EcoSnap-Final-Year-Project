@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { useAdminDashboard } from "@/hooks/useAdminDashboard";
 import { Badge } from "@/components/ui/badge";
+import AdminReportGenerator from "@/components/admin/AdminReportGenerator";
 
 const CHART_COLORS = {
   primary: "#10b981",
@@ -146,6 +147,7 @@ export default function AdminDashboard() {
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
           Welcome back! Here's your system overview.
+          <AdminReportGenerator/>
         </p>
       </div>
 
