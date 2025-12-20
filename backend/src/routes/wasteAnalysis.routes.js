@@ -258,22 +258,27 @@ router.get(
   })
 );
 
-// Get single waste analysis by ID
+// Get single waste report by ID (ADMIN)
 router.get(
-  "/:id",
+  "/admin/:id",
   isAuthenticated,
+  isAdmin,
   asyncHandler(async (req, res) => {
-    const userId = req.user.user_id;
     const { id } = req.params;
 
-    // Find item by ID and ensure it belongs to this user
-    const analysis = await prisma.wasteAnalysis.findFirst({
-      where: {
-        waste_id: id,
-        waste_analysedBy: userId,
-      },
+    const analysis = await prisma.wasteAnalysis.findUnique({
+      where: { waste_id: id },
       include: {
         waste_wasteCategories: true,
+        waste_user: {
+          select: {
+            user_id: true,
+            user_fullName: true,
+            user_email: true,
+            user_phoneNumber: true,
+            user_points: true,
+          },
+        },
       },
     });
 

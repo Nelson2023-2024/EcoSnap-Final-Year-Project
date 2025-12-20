@@ -165,26 +165,28 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
   });
 }
 
-export function useWasteAnalysis(id: string | undefined) {
-  return useQuery<WasteAnalysisItem, Error>({
+// Get single waste analysis (with admin support)
+export function useWasteAnalysis(id: string, isAdmin: boolean = true) {
+  return useQuery({
     queryKey: ["wasteAnalysis", id],
-    enabled: !!id,
-
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/waste-analysis/${id}`, {
+      // Use admin endpoint if isAdmin flag is true
+      const endpoint = isAdmin 
+        ? `${API_URL}/waste-analysis/admin/${id}`
+        : `${API_URL}/waste-analysis/${id}`;
+        
+      const response = await fetch(endpoint, {
         credentials: "include",
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to fetch report");
+      if (!response.ok) {
+        throw new Error("Failed to fetch waste analysis");
       }
 
-      const json: SingleWasteAnalysisResponse = await res.json();
-      return json.data;
+      const data = await response.json();
+      return data.data;
     },
-
-    staleTime: 1000 * 60 * 2,
+    enabled: !!id,
   });
 }
 
@@ -215,5 +217,26 @@ export function useAdminWasteReportsInfinite(limit = 10) {
     },
 
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+
+// Add to useWasteAnalysis.ts
+export function useAdminWasteAnalysis(id: string) {
+  return useQuery({
+    queryKey: ["adminWasteAnalysis", id],
+    queryFn: async () => {
+      const response = await fetch(`${API_URL}/waste-analysis/admin/${id}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch waste analysis");
+      }
+
+      const data = await response.json();
+      return data.data;
+    },
+    enabled: !!id,
   });
 }

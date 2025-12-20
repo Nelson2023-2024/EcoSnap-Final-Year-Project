@@ -16,15 +16,16 @@ import {
   ArrowLeft,
   LoaderIcon,
   Settings,
+  Navigation,
 } from "lucide-react";
-import { useWasteAnalysis } from "@/hooks/useWasteAnalysis";
+import { useAdminWasteAnalysis } from "@/hooks/useWasteAnalysis";
 import { 
   useGetDispatches, 
   useCreateAutoDispatch, 
   useCreateManualDispatch,
   useCanDispatch 
 } from "@/hooks/useDispatch";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -43,19 +44,53 @@ import {
 import { Label } from "@/components/ui/label";
 import { useTeams } from "@/hooks/useTeams";
 import { useTrucks } from "@/hooks/useTruck";
-import { toast } from "react-hot-toast";
+
+// Type definitions
+interface WasteCategory {
+  id: string;
+  waste_type: string;
+  waste_estimatedPercentage: number;
+}
+
+interface WasteUser {
+  user_fullName: string;
+  user_email: string;
+  user_phoneNumber?: string;
+}
+
+interface WasteAnalysis {
+  waste_id: string;
+  waste_imageURL: string;
+  waste_status: string;
+  waste_containsWaste: boolean;
+  waste_confidenceLevel?: string;
+  waste_overallCategory?: string;
+  waste_dominantWasteType?: string;
+  waste_estimatedVolumeValue?: number;
+  waste_estimatedVolumeUnit?: string;
+  waste_wasteCategories?: WasteCategory[];
+  waste_locationAddress?: string;
+  waste_locationLatitude: number;
+  waste_locationLongitude: number;
+  waste_user?: WasteUser;
+  waste_possibleSource?: string;
+  waste_environmentalImpact?: string;
+  waste_errorMessage?: string;
+  waste_createdAt: string;
+  waste_updatedAt: string;
+}
 
 export default function ReportDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const reportId = params.reportId as string;
 
-  const { data: waste, isLoading: wasteLoading } = useWasteAnalysis(reportId);
+  const { data: waste, isLoading: wasteLoading } = useAdminWasteAnalysis(reportId);
   
   // Get all dispatches and filter for this waste report
   const { data: dispatchesData } = useGetDispatches({ page: 1, limit: 100 });
   const dispatch = dispatchesData?.data.find(
-    (d) => d.dispatch_wasteAnalysisId === reportId
+    (d: any) => d.dispatch_wasteAnalysisId === reportId
   );
 
   // Check if waste can be dispatched
@@ -301,7 +336,7 @@ export default function ReportDetailsPage() {
                   <div className="space-y-2 md:col-span-2">
                     <p className="text-sm text-muted-foreground">Waste Categories Breakdown</p>
                     <div className="flex flex-wrap gap-2">
-                      {waste.waste_wasteCategories.map((cat) => (
+                      {waste.waste_wasteCategories.map((cat: WasteCategory) => (
                         <Badge key={cat.id} variant="outline" className="text-xs">
                           {cat.waste_type}: {cat.waste_estimatedPercentage}%
                         </Badge>
@@ -320,6 +355,20 @@ export default function ReportDetailsPage() {
                   <p className="text-xs text-muted-foreground">
                     Coordinates: {waste.waste_locationLatitude.toFixed(6)}, {waste.waste_locationLongitude.toFixed(6)}
                   </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      window.open(
+                        `https://www.google.com/maps?q=${waste.waste_locationLatitude},${waste.waste_locationLongitude}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    <Navigation className="h-4 w-4 mr-2" />
+                    Open in Google Maps
+                  </Button>
                 </div>
 
                 {/* Reporter Information */}
