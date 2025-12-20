@@ -693,10 +693,12 @@ const AdminReportGenerator = () => {
 
   return (
     <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-eco-primary" />
-          Generate System Report
+            <CardHeader>
+        <CardTitle>
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-eco-primary" />
+            Generate System Report
+          </div>
         </CardTitle>
         <CardDescription>
           Create comprehensive PDF reports for waste management analytics
