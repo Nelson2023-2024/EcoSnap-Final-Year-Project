@@ -258,45 +258,8 @@ router.get(
   })
 );
 
-// Get single waste report by ID (ADMIN)
-router.get(
-  "/admin/:id",
-  isAuthenticated,
-  isAdmin,
-  asyncHandler(async (req, res) => {
-    const { id } = req.params;
-
-    const analysis = await prisma.wasteAnalysis.findUnique({
-      where: { waste_id: id },
-      include: {
-        waste_wasteCategories: true,
-        waste_user: {
-          select: {
-            user_id: true,
-            user_fullName: true,
-            user_email: true,
-            user_phoneNumber: true,
-            user_points: true,
-          },
-        },
-      },
-    });
-
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        message: "Waste analysis report not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: analysis,
-    });
-  })
-);
-
-// Get all waste reports (ADMIN)
+// ⚠️ IMPORTANT: Put /admin/all BEFORE /admin/:id to avoid route conflicts
+// Get all waste reports (ADMIN) - Must come FIRST
 router.get(
   "/admin/all",
   isAuthenticated,
@@ -333,6 +296,44 @@ router.get(
       total,
       totalPages: Math.ceil(total / limit),
       data: results,
+    });
+  })
+);
+
+// Get single waste report by ID (ADMIN) - Must come AFTER /admin/all
+router.get(
+  "/admin/:id",
+  isAuthenticated,
+  isAdmin,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const analysis = await prisma.wasteAnalysis.findUnique({
+      where: { waste_id: id },
+      include: {
+        waste_wasteCategories: true,
+        waste_user: {
+          select: {
+            user_id: true,
+            user_fullName: true,
+            user_email: true,
+            user_phoneNumber: true,
+            user_points: true,
+          },
+        },
+      },
+    });
+
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: "Waste analysis report not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: analysis,
     });
   })
 );
