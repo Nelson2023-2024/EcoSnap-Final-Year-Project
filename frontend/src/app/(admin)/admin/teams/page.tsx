@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type Specialization = "general" | "recyclables" | "e-waste" | "organic" | "hazardous";
+type Specialization = "general" | "recyclables" | "e_waste" | "organic" | "hazardous";
 
 export default function Teams() {
   const { data: teams, isLoading, error } = useTeams();
@@ -97,7 +97,7 @@ export default function Teams() {
 
     try {
       await updateTeamMutation.mutateAsync({
-        id: selectedTeam._id,
+        id: selectedTeam.team_id,
         name: updateTeamName,
         specialization: updateSpecialization,
         status: updateStatus,
@@ -113,7 +113,7 @@ export default function Teams() {
     switch (type) {
       case "recyclables":
         return "bg-accent/20 text-accent-foreground";
-      case "e-waste":
+      case "e_waste":
         return "bg-yellow-200 text-yellow-900";
       case "organic":
         return "bg-green-200 text-green-900";
@@ -126,7 +126,11 @@ export default function Teams() {
     }
   };
 
- if (isLoading) {
+  const formatSpecialization = (spec: string) => {
+    return spec.replace(/_/g, "-").replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -136,12 +140,93 @@ export default function Teams() {
       </div>
     );
   }
-  if (error)
+
+  if (error) {
     return (
       <p className="text-center text-red-500 py-10">Failed to load teams</p>
     );
-  if (!teams || teams.length === 0)
-    return <p className="text-center py-10">No teams available</p>;
+  }
+
+  if (!teams || teams.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground">
+              Teams Management
+            </h2>
+            <p className="text-muted-foreground">
+              Manage your waste collection teams
+            </p>
+          </div>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Team
+              </Button>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create Team</DialogTitle>
+                <DialogDescription>
+                  Enter team details below and click save to create a new team.
+                </DialogDescription>
+              </DialogHeader>
+
+              <form className="grid gap-4" onSubmit={handleSubmit}>
+                <div className="grid gap-3">
+                  <Label htmlFor="name">Team Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    placeholder="Enter team name"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid gap-3">
+                  <Label htmlFor="specialization">Specialization</Label>
+                  <Select
+                    value={specialization}
+                    onValueChange={(value) => setSpecialization(value as Specialization)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select specialization" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Specialization</SelectLabel>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="recyclables">Recyclables</SelectItem>
+                        <SelectItem value="e_waste">E-Waste</SelectItem>
+                        <SelectItem value="organic">Organic</SelectItem>
+                        <SelectItem value="hazardous">Hazardous</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit" disabled={createTeamMutation.isPending}>
+                    {createTeamMutation.isPending ? "Creating..." : "Create"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <p className="text-center py-10 text-muted-foreground">No teams available. Create your first team to get started!</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -197,7 +282,7 @@ export default function Teams() {
                       <SelectLabel>Specialization</SelectLabel>
                       <SelectItem value="general">General</SelectItem>
                       <SelectItem value="recyclables">Recyclables</SelectItem>
-                      <SelectItem value="e-waste">E-Waste</SelectItem>
+                      <SelectItem value="e_waste">E-Waste</SelectItem>
                       <SelectItem value="organic">Organic</SelectItem>
                       <SelectItem value="hazardous">Hazardous</SelectItem>
                     </SelectGroup>
@@ -220,7 +305,7 @@ export default function Teams() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {teams.map((team: any) => (
-          <Card key={team._id} className="hover:shadow-lg transition-shadow">
+          <Card key={team.team_id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -229,7 +314,7 @@ export default function Teams() {
                   </div>
                   <div>
                     <CardTitle className="text-lg">{team.team_name}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{team._id}</p>
+                    <p className="text-xs text-muted-foreground">{team.team_id}</p>
                   </div>
                 </div>
 
@@ -239,14 +324,14 @@ export default function Teams() {
                       team.team_status === "active" ? "default" : "secondary"
                     }
                   >
-                    {team.team_status}
+                    {team.team_status.replace(/_/g, " ")}
                   </Badge>
                   
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(team._id, team.team_name)}
+                    onClick={() => handleDelete(team.team_id, team.team_name)}
                     disabled={deleteTeamMutation.isPending}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -262,7 +347,7 @@ export default function Teams() {
                     team.team_specialization
                   )}`}
                 >
-                  {team.team_specialization}
+                  {formatSpecialization(team.team_specialization)}
                 </span>
               </div>
 
@@ -274,17 +359,24 @@ export default function Teams() {
                   </span>
                 </div>
 
-                <div className="space-y-1">
-                  {team.team_members?.map((member: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 text-sm text-foreground"
-                    >
-                      <User className="h-3 w-3 text-muted-foreground" />
-                      {member.fullName}
-                    </div>
-                  ))}
-                </div>
+                {team.team_members && team.team_members.length > 0 && (
+                  <div className="space-y-1">
+                    {team.team_members.slice(0, 3).map((member: any) => (
+                      <div
+                        key={member.id}
+                        className="flex items-center gap-2 text-sm text-foreground"
+                      >
+                        <User className="h-3 w-3 text-muted-foreground" />
+                        {member.user.user_fullName || member.user.user_email}
+                      </div>
+                    ))}
+                    {team.team_members.length > 3 && (
+                      <p className="text-xs text-muted-foreground pl-5">
+                        +{team.team_members.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between text-sm">
@@ -293,6 +385,15 @@ export default function Teams() {
                   {team.team_trucks?.length || 0}
                 </span>
               </div>
+
+              {team._count && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Total Dispatches</span>
+                  <span className="font-medium text-foreground">
+                    {team._count.team_dispatches || 0}
+                  </span>
+                </div>
+              )}
 
               <Button variant="outline" className="w-full" onClick={() => handleManageTeam(team)}>
                 Manage Team
@@ -338,7 +439,7 @@ export default function Teams() {
                     <SelectLabel>Specialization</SelectLabel>
                     <SelectItem value="general">General</SelectItem>
                     <SelectItem value="recyclables">Recyclables</SelectItem>
-                    <SelectItem value="e-waste">E-Waste</SelectItem>
+                    <SelectItem value="e_waste">E-Waste</SelectItem>
                     <SelectItem value="organic">Organic</SelectItem>
                     <SelectItem value="hazardous">Hazardous</SelectItem>
                   </SelectGroup>

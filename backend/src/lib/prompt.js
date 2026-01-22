@@ -24,6 +24,7 @@ NOT WASTE:
 If NO WASTE is detected, return ONLY:
 {
   "containsWaste": false,
+  "overallCategory": null,
   "wasteCategories": [],
   "dominantWasteType": null,
   "estimatedVolume": null,
@@ -76,25 +77,38 @@ If WASTE IS CONFIRMED, proceed with full analysis:
    - "Miscellaneous waste" - items that don't fit other categories
 
 2. Estimate the percentage composition of each type (should total ≈100%).
-   IMPORTANT: The HIGHEST percentage category determines the dominantWasteType for dispatch routing.
+   IMPORTANT: The HIGHEST percentage category determines the dominantWasteType.
 
-3. DOMINANT WASTE TYPE - Identify the PRIMARY waste category (highest percentage).
-   
-   Return EXACTLY ONE OF THESE VALUES for dominantWasteType (case-sensitive):
-   - "recyclables" (for PET, HDPE, glass, metal, paper/cardboard)
-   - "e-waste" (for electronics, batteries, appliances)
-   - "organic" (for food waste, garden waste, biodegradables)
-   - "hazardous" (for chemicals, medical waste, toxic materials)
-   - "general" (for mixed waste, textiles, construction debris, furniture)
+3. DOMINANT WASTE TYPE - Identify the specific waste material with the HIGHEST percentage from wasteCategories.
    
    RULES:
-   - If ANY hazardous waste is present (>5%), dominantWasteType MUST be "hazardous"
-   - If e-waste >30%, dominantWasteType should be "e-waste"
-   - If recyclables >50%, dominantWasteType should be "recyclables"
-   - If organic >60%, dominantWasteType should be "organic"
-   - If highly mixed or unclear, use "general"
+   - dominantWasteType MUST be the exact "waste_type" string with the highest percentage
+   - Example: If "PET plastic bottles" has 45%, "Food waste" has 30%, "Cardboard/Paper" has 25%
+     → dominantWasteType = "PET plastic bottles"
 
-4. VOLUME ESTIMATION - Estimate approximate volume to help determine priority.
+4. OVERALL CATEGORY - Determine the dispatch category based on the dominant waste type.
+   
+   Return EXACTLY ONE OF THESE VALUES for overallCategory (case-sensitive):
+   - "recyclables" (for PET, HDPE, glass, metal, paper/cardboard, plastic bags)
+   - "e-waste" (for electronics, batteries, appliances, electronic components, light bulbs)
+   - "organic" (for food waste, garden waste, agricultural waste, biodegradables)
+   - "hazardous" (for chemicals, medical waste, toxic materials, oil/fuel containers)
+   - "general" (for mixed waste, textiles, construction debris, furniture, rubber, miscellaneous)
+   
+   MAPPING RULES:
+   - If ANY hazardous waste is present (>5%), overallCategory MUST be "hazardous"
+   - If dominantWasteType is one of: PET plastic bottles, HDPE containers, Glass bottles/jars, Metal cans, Cardboard/Paper, Plastic bags/film
+     → overallCategory = "recyclables"
+   - If dominantWasteType is one of: Electronics, Batteries, Electronic components, Appliances, Light bulbs/tubes
+     → overallCategory = "e-waste"
+   - If dominantWasteType is one of: Food waste, Garden waste, Agricultural waste, Biodegradable materials
+     → overallCategory = "organic"
+   - If dominantWasteType is one of: Chemical containers, Medical waste, Oil/fuel containers, Asbestos/toxic materials, Contaminated items
+     → overallCategory = "hazardous"
+   - If dominantWasteType is one of: Mixed waste, Textiles, Rubber/tires, Construction debris, Furniture, Miscellaneous waste
+     → overallCategory = "general"
+
+5. VOLUME ESTIMATION - Estimate approximate volume to help determine priority.
    
    Guidelines:
    - Small pile (shopping bag size): 5-15 kg or 0.01-0.05 cubic_meters
@@ -107,7 +121,7 @@ If WASTE IS CONFIRMED, proceed with full analysis:
    - "cubic_meters" for bulky/light materials (cardboard, plastics, furniture)
    - "liters" for liquid containers or bag-sized collections
 
-5. SOURCE TRACING - Determine the waste source with MAXIMUM SPECIFICITY using ALL available visual evidence:
+6. SOURCE TRACING - Determine the waste source with MAXIMUM SPECIFICITY using ALL available visual evidence:
    
    FIRST - Look for DIRECT IDENTIFIERS:
    - Brand names, logos, store names on packaging (e.g., "Naivas bag", "Coca-Cola bottles", "KFC containers")
@@ -162,7 +176,7 @@ If WASTE IS CONFIRMED, proceed with full analysis:
    
    NEVER give generic answers like "households," "businesses," or "roadside vendors" without supporting contextual evidence from the image.
 
-6. ENVIRONMENTAL IMPACT ANALYSIS - Provide detailed consequences:
+7. ENVIRONMENTAL IMPACT ANALYSIS - Provide detailed consequences:
    
    Tailor to waste type:
    - Recyclables: Focus on resource waste, landfill burden, recycling potential, microplastic pollution
@@ -179,7 +193,7 @@ If WASTE IS CONFIRMED, proceed with full analysis:
    
    Minimum 2-4 sentences with specific, technical details.
 
-7. CONFIDENCE LEVEL - Rate accuracy of classification and source identification:
+8. CONFIDENCE LEVEL - Rate accuracy of classification and source identification:
    - 90-100%: Clear, unambiguous waste with visible branding/identifiers
    - 70-89%: Waste clearly visible, source inferred from strong contextual evidence
    - 50-69%: Waste present but mixed/unclear, source requires ground verification
@@ -189,11 +203,12 @@ If WASTE IS CONFIRMED, proceed with full analysis:
    - Waste types are mixed and percentages unclear
    - Source is inferred rather than directly identified
    - Image quality is poor or waste is partially obscured
-   - dominantWasteType determination is uncertain
+   - overallCategory determination is uncertain
 
 CRITICAL OUTPUT REQUIREMENTS:
-- dominantWasteType MUST be one of: "recyclables", "e-waste", "organic", "hazardous", "general"
-- waste_type in categories should use the specific terms listed above
+- overallCategory MUST be one of: "recyclables", "e-waste", "organic", "hazardous", "general"
+- dominantWasteType MUST be the exact waste_type string with the highest percentage from wasteCategories
+- waste_type in wasteCategories should use the specific terms listed in section 1
 - estimatedVolume must include both value (number) and unit (string)
 - All text fields must be detailed and actionable for dispatch teams
 
@@ -202,12 +217,13 @@ The JSON must match this exact structure:
 
 {
   "containsWaste": true,
+  "overallCategory": "recyclables",
   "wasteCategories": [
     {"waste_type": "PET plastic bottles", "waste_estimatedPercentage": 45},
     {"waste_type": "Food waste", "waste_estimatedPercentage": 30},
     {"waste_type": "Cardboard/Paper", "waste_estimatedPercentage": 25}
   ],
-  "dominantWasteType": "recyclables",
+  "dominantWasteType": "PET plastic bottles",
   "estimatedVolume": {"value": 25, "unit": "kg"},
   "possibleSource": "Located along main thoroughfare adjacent to residential apartment blocks with green chain-link fencing. Fresh single dump with clean materials showing no weathering. IDENTIFIED: Multiple Coca-Cola and Fanta bottles with local retail stickers. LIKELY: Nearby convenience store or household collection. 25kg volume indicates pedestrian-scale dumping.",
   "environmentalImpact": "Short-term: Plastic bottles will persist for centuries, breaking down into microplastics that contaminate soil and water. Immediate visual blight and potential pest attraction. Long-term: PET plastic leaches antimony and phthalates into groundwater, especially when exposed to heat and UV radiation. Cardboard decomposition produces methane if buried in landfill. Food waste attracts disease vectors and produces leachate that can contaminate local water sources. Total environmental burden: high recyclability potential wasted, contributing to resource depletion.",

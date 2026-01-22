@@ -2,6 +2,18 @@ import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
+interface Product {
+  product_id: string;
+  product_name: string;
+  product_description: string | null;
+  product_imageURL: string;
+  product_pointsCost: number;
+  product_stock: number;
+  product_isAvailable: boolean;
+  product_createdAt: string;
+  product_updatedAt: string;
+}
+
 // Get all products
 export function useProducts() {
   return useQuery({
@@ -16,7 +28,7 @@ export function useProducts() {
       }
 
       const data = await response.json();
-      return data.data || [];
+      return (data.data || []) as Product[];
     },
   });
 }
@@ -35,7 +47,7 @@ export function useProduct(id: string) {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Product;
     },
     enabled: !!id,
   });
@@ -72,11 +84,16 @@ export function useCreateProduct() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Product;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Product created successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create product");
@@ -126,12 +143,17 @@ export function useUpdateProduct() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Product;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["product", data._id] });
+      queryClient.invalidateQueries({ queryKey: ["product", data.product_id] });
       toast.success("Product updated successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update product");
@@ -161,6 +183,11 @@ export function useDeleteProduct() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Product deleted successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete product");

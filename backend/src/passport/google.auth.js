@@ -2,21 +2,27 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import asyncHandler from "express-async-handler";
 import passport from "passport";
 import { ENV } from "../config/env.config.js";
-import { User } from "../models/user.model.js";
+import { prisma } from "../config/prisma.config.js";
 
 //get the user from the GoogleStrategy
 passport.serializeUser((user, done) => {
-  console.log("Inside Serialize User");
-  console.log("User from serialize User", user);
-  done(null, user.id);
+  console.log("Inside Serialize User", user);
+  if (!user.user_id) return done(new Error("User missing user_id"));
+  done(null, user.user_id);
 });
 
 passport.deserializeUser(async (id, done) => {
+  if (!id) {
+    console.error("deserializeUser called with undefined id");
+    return done(new Error("No user ID provided"), null);
+  }
+
   try {
-    const findUser = await User.findById(id);
-    return findUser ? done(null, findUser) : done(null, null);
-  } catch (error) {
-    done(error, null);
+    const findUser = await prisma.user.findUnique({ where: { user_id: id } });
+    return done(null, findUser || null);
+  } catch (err) {
+    console.error(err);
+    return done(err, null);
   }
 });
 
@@ -27,35 +33,86 @@ export default passport.use(
       clientSecret: ENV.GOOGLE_CLIENT_SECRET,
       callbackURL: ENV.GOOGLE_CALLBACK_URL,
       scope: ["profile", "email"],
+      passReqToCallback: false,
+      proxy: true,
     },
-    //profile is the user object
     asyncHandler(async function (accessToken, refreshToken, profile, done) {
-      console.log("profile:", profile);
-      const findUser = await User.findOne({ googleID: profile.id });
+      try {
+        console.log("profile:", profile);
 
-      if (!findUser) {
-        const newUser = await User.create({
-          email: profile.emails?.[0]?.value || "",
-          firstName: profile.name?.givenName || "",
-          lastName: profile.name?.familyName || "",
-          fullName:
-            profile.displayName ||
-            `${profile.name?.givenName || ""} ${
-              profile.name?.familyName || ""
-            }`,
-          profileImage: profile.photos?.[0]?.value || "",
-          username: (profile.emails?.[0]?.value || "").split("@")[0],
-          phoneNumber: "",
-          password: "",
-          googleID: profile.id,
-          authProvider: "google",
-          points: 0,
+        const findUser = await prisma.user.findFirst({
+          where: { user_googleID: profile.id },
         });
-        return done(null, newUser);
-      }
 
-      //if user is found
-      return done(null, findUser);
+        if (!findUser) {
+          console.log("Creating new user...");
+          const newUser = await prisma.user.create({
+            data: {
+              user_email:
+                profile.emails?.[0]?.value ||
+                `${profile.id}@google.placeholder`,
+              user_firstName: profile.name?.givenName || null,
+              user_lastName: profile.name?.familyName || null,
+              user_fullName:
+                profile.displayName ||
+                `${profile.name?.givenName || ""} ${
+                  profile.name?.familyName || ""
+                }`.trim() ||
+                null,
+              user_profileImage: profile.photos?.[0]?.value || undefined,
+              user_username: (
+                profile.emails?.[0]?.value || `user_${profile.id}`
+              ).split("@")[0],
+              user_phoneNumber: null,
+              user_password: null,
+              user_googleID: profile.id,
+              user_authProvider: "google",
+              user_points: 0,
+            },
+          });
+          console.log("New user created:", newUser);
+          
+          // ✅ Create login notification for new user
+          await prisma.notification.create({
+            data: {
+              notification_userId: newUser.user_id,
+              notification_type: "login",
+              notification_title: "Welcome to EcoSnap! 🌱",
+              notification_message:
+                "Your account has been created successfully. Start reporting waste to earn points!",
+              notification_metadata: {
+                firstLogin: true,
+                provider: "google",
+              },
+            },
+          });
+          
+          return done(null, newUser);
+        }
+
+        console.log("User found:", findUser);
+        
+        // ✅ Create login notification for returning user
+        await prisma.notification.create({
+          data: {
+            notification_userId: findUser.user_id,
+            notification_type: "login",
+            notification_title: "Welcome Back! 👋",
+            notification_message: `Good to see you again, ${findUser.user_fullName || "there"}!`,
+            notification_metadata: {
+              loginTime: new Date().toISOString(),
+              provider: "google",
+            },
+          },
+        });
+        
+        return done(null, findUser);
+      } catch (error) {
+        console.error("Google auth error:", error);
+        console.error("Error message:", error.message);
+        console.error("Error code:", error.code);
+        return done(error, null);
+      }
     })
   )
 );

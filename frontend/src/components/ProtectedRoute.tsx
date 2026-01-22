@@ -7,7 +7,7 @@ import { LoaderIcon } from "lucide-react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: "user" | "admin";
+  requiredRole?: "user" | "admin" | "collector";
 }
 
 export default function ProtectedRoute({
@@ -29,6 +29,11 @@ export default function ProtectedRoute({
       if (requiredRole === "admin" && user.role !== "admin") {
         router.push("/user-dashboard");
       }
+      
+      // If collector route but user is not collector → redirect to dashboard
+      if (requiredRole === "collector" && user.role !== "collector") {
+        router.push("/user-dashboard");
+      }
     }
   }, [user, isLoading, router, requiredRole]);
 
@@ -48,6 +53,7 @@ export default function ProtectedRoute({
   if (!user) return null;
 
   if (requiredRole === "admin" && user.role !== "admin") return null;
+  if (requiredRole === "collector" && user.role !== "collector") return null;
 
   // Authenticated and authorized → render children
   return <>{children}</>;

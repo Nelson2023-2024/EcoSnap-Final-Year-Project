@@ -20,6 +20,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from "recharts";
 import {
   FileText,
@@ -27,60 +28,118 @@ import {
   Truck,
   CheckCircle,
   TrendingUp,
+  TrendingDown,
   AlertTriangle,
+  LoaderIcon,
+  Clock,
+  Award,
+  MapPin,
 } from "lucide-react";
+import { useAdminDashboard } from "@/hooks/useAdminDashboard";
+import { Badge } from "@/components/ui/badge";
+import AdminReportGenerator from "@/components/admin/AdminReportGenerator";
 
-const statsData = [
-  {
-    title: "Total Reports",
-    value: "1,247",
-    change: "+12.3%",
-    icon: FileText,
-    color: "text-primary",
-  },
-  {
-    title: "Active Users",
-    value: "8,432",
-    change: "+8.1%",
-    icon: Users,
-    color: "text-blue-600",
-  },
-  {
-    title: "Dispatched Trucks",
-    value: "156",
-    change: "+5.2%",
-    icon: Truck,
-    color: "text-orange-600",
-  },
-  {
-    title: "Completed Collections",
-    value: "1,089",
-    change: "+15.7%",
-    icon: CheckCircle,
-    color: "text-success",
-  },
-];
+const CHART_COLORS = {
+  primary: "#10b981",
+  secondary: "#3b82f6",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  teal: "#14b8a6",
+  indigo: "#6366f1",
+};
 
-const weeklyData = [
-  { day: "Mon", reports: 45, collections: 38 },
-  { day: "Tue", reports: 52, collections: 45 },
-  { day: "Wed", reports: 61, collections: 52 },
-  { day: "Thu", reports: 48, collections: 41 },
-  { day: "Fri", reports: 70, collections: 58 },
-  { day: "Sat", reports: 38, collections: 30 },
-  { day: "Sun", reports: 25, collections: 18 },
-];
+export default function AdminDashboard() {
+  const { data, isLoading, isError } = useAdminDashboard();
 
-const wasteTypeData = [
-  { name: "PET Plastic", value: 320, color: "#22c55e" },
-  { name: "HDPE", value: 180, color: "#3b82f6" },
-  { name: "Glass", value: 240, color: "#f59e0b" },
-  { name: "E-waste", value: 150, color: "#ef4444" },
-  { name: "Textiles", value: 120, color: "#8b5cf6" },
-  { name: "Others", value: 237, color: "#6b7280" },
-];
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <LoaderIcon className="h-8 w-8 animate-spin text-eco-primary" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
-export default function Dashboard() {
+  if (isError || !data) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-center text-red-600">
+              Failed to load dashboard. Please try again.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const { overview } = data;
+
+  // Prepare stats data
+  const statsData = [
+    {
+      title: "Total Reports",
+      value: overview.totalReports.value.toLocaleString(),
+      change: overview.totalReports.change,
+      trend: overview.totalReports.trend,
+      icon: FileText,
+      color: "text-eco-primary",
+    },
+    {
+      title: "Active Users",
+      value: overview.activeUsers.value.toLocaleString(),
+      change: overview.activeUsers.change,
+      trend: overview.activeUsers.trend,
+      icon: Users,
+      color: "text-blue-600",
+      subtitle: `${overview.activeUsers.weeklyActive} active this week`,
+    },
+    {
+      title: "Dispatched Trucks",
+      value: overview.dispatchedTrucks.value.toLocaleString(),
+      change: overview.dispatchedTrucks.change,
+      trend: overview.dispatchedTrucks.trend,
+      icon: Truck,
+      color: "text-orange-600",
+      subtitle: `${overview.dispatchedTrucks.inUse} in use`,
+    },
+    {
+      title: "Completed Collections",
+      value: overview.completedCollections.value.toLocaleString(),
+      change: overview.completedCollections.change,
+      trend: overview.completedCollections.trend,
+      icon: CheckCircle,
+      color: "text-green-600",
+    },
+  ];
+
+  // Prepare weekly activity data
+  const weeklyData = data.weeklyActivity.reports.map((report, index) => ({
+    day: report.day,
+    reports: report.count,
+    collections: data.weeklyActivity.collections[index]?.count || 0,
+  }));
+
+  // Format time for recent alerts
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours} hours ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays === 1) return "1 day ago";
+    return `${diffInDays} days ago`;
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -88,13 +147,14 @@ export default function Dashboard() {
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">
           Welcome back! Here's your system overview.
+          <AdminReportGenerator/>
         </p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsData.map((stat) => (
-          <Card key={stat.title}>
+          <Card key={stat.title} className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {stat.title}
@@ -103,18 +163,87 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-success flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                {stat.change} from last month
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p
+                  className={`text-xs flex items-center gap-1 ${
+                    stat.trend === "up" ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {stat.trend === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  {stat.change} from last month
+                </p>
+              </div>
+              {stat.subtitle && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stat.subtitle}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* Performance Metrics */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Avg Response Time
+            </CardTitle>
+            <Clock className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-500">
+              {overview.avgResponseTime.toFixed(1)}h
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Report to dispatch time
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Collection Rate
+            </CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-500">
+              {overview.collectionRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Successfully collected
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Points Awarded
+            </CardTitle>
+            <Award className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-500">
+              {overview.totalPointsAwarded.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ecosystem rewards
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Line Chart */}
+        {/* Line Chart - Weekly Activity */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Activity</CardTitle>
@@ -126,24 +255,24 @@ export default function Dashboard() {
             <div className="w-full h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weeklyData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-muted"
-                  />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="day" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip />
+                  <Legend />
                   <Line
                     type="monotone"
                     dataKey="reports"
-                    stroke="#16a34a"
+                    stroke={CHART_COLORS.primary}
                     strokeWidth={2}
+                    name="Reports"
                   />
                   <Line
                     type="monotone"
                     dataKey="collections"
-                    stroke="#0ea5e9"
+                    stroke={CHART_COLORS.secondary}
                     strokeWidth={2}
+                    name="Collections"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -151,7 +280,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Pie Chart */}
+        {/* Pie Chart - Waste Type Distribution */}
         <Card>
           <CardHeader>
             <CardTitle>Waste Type Distribution</CardTitle>
@@ -164,7 +293,7 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={wasteTypeData}
+                    data={data.wasteTypeDistribution}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -174,8 +303,8 @@ export default function Dashboard() {
                     outerRadius={80}
                     dataKey="value"
                   >
-                    {wasteTypeData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
+                    {data.wasteTypeDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -186,43 +315,245 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Recent Alerts */}
+      {/* Status Breakdowns */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Waste Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Waste Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.wasteStatus.map((status) => (
+                <div
+                  key={status.status}
+                  className="flex items-center justify-between p-2 border rounded"
+                >
+                  <span className="text-sm capitalize">
+                    {status.status.replace(/_/g, " ")}
+                  </span>
+                  <Badge variant="secondary">{status.count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dispatch Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Dispatch Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.dispatchStatus.map((status) => (
+                <div
+                  key={status.status}
+                  className="flex items-center justify-between p-2 border rounded"
+                >
+                  <span className="text-sm capitalize">
+                    {status.status.replace(/_/g, " ")}
+                  </span>
+                  <Badge variant="secondary">{status.count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Truck Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Truck Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.truckStatus.map((status) => (
+                <div
+                  key={status.status}
+                  className="flex items-center justify-between p-2 border rounded"
+                >
+                  <span className="text-sm capitalize">
+                    {status.status.replace(/_/g, " ")}
+                  </span>
+                  <Badge variant="secondary">{status.count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Team Performance Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-            Recent Alerts
-          </CardTitle>
+          <CardTitle>Team Performance</CardTitle>
+          <CardDescription>Top performing collection teams</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="w-full h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.teamPerformance.slice(0, 5)}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="teamName" className="text-xs" />
+                <YAxis className="text-xs" />
+                <Tooltip />
+                <Legend />
+                <Bar
+                  dataKey="totalDispatches"
+                  fill={CHART_COLORS.primary}
+                  name="Dispatches"
+                />
+                <Bar
+                  dataKey="memberCount"
+                  fill={CHART_COLORS.secondary}
+                  name="Members"
+                />
+                <Bar
+                  dataKey="truckCount"
+                  fill={CHART_COLORS.warning}
+                  name="Trucks"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recent Alerts & Location Hotspots */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Recent Alerts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              Recent Alerts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {data.recentAlerts.length > 0 ? (
+                data.recentAlerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                  >
+                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {alert.location}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {alert.issue}
+                      </p>
+                      {alert.reporter && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Reported by: {alert.reporter}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatTimeAgo(alert.time)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-muted-foreground py-4">
+                  No recent alerts
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Location Hotspots */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-red-500" />
+              Location Hotspots
+            </CardTitle>
+            <CardDescription>
+              Areas with multiple reports
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {data.locationHotspots.length > 0 ? (
+                data.locationHotspots.map((spot) => (
+                  <div
+                    key={spot.location}
+                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                  >
+                    <MapPin className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {spot.location}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {spot.reportCount} reports
+                        {spot.category && (
+                          <span className="ml-2 capitalize">
+                            • {spot.category}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatTimeAgo(spot.lastReport)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-muted-foreground py-4">
+                  No hotspots detected
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Users Leaderboard */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Contributors</CardTitle>
+          <CardDescription>Users with highest impact</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[
-              {
-                location: "Downtown Market",
-                issue: "High e-waste concentration detected",
-                time: "2 hours ago",
-              },
-              {
-                location: "River Park",
-                issue: "Multiple reports from same location",
-                time: "5 hours ago",
-              },
-              {
-                location: "Industrial Zone",
-                issue: "Hazardous material flagged",
-                time: "1 day ago",
-              },
-            ].map((alert, i) => (
+            {data.topUsers.slice(0, 10).map((user, index) => (
               <div
-                key={i}
-                className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                key={user.userId}
+                className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">{alert.location}</p>
-                  <p className="text-sm text-muted-foreground">{alert.issue}</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-eco-primary text-white font-bold text-sm">
+                    {index + 1}
+                  </div>
+                  <img
+                    src={
+                      user.profileImage ||
+                      "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+                    }
+                    alt={user.name || "User"}
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <div>
+                    <p className="font-semibold text-sm">
+                      {user.name || user.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {user.reportCount} reports
+                    </p>
+                  </div>
                 </div>
-                <span className="text-xs text-muted-foreground">{alert.time}</span>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-eco-primary">
+                    {user.points.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">points</p>
+                </div>
               </div>
             ))}
           </div>

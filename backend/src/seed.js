@@ -1,9 +1,11 @@
 // seed.js
 
-import { prisma } from "./config/prisma.config.js";
+import { prisma, testConnection } from "./config/prisma.config.js";
 
 async function main() {
+  testConnection();
   console.log("Seeding database...");
+  
 
   // Create a new user
   const user = await prisma.user.create({

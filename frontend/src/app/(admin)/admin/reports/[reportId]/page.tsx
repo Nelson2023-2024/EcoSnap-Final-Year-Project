@@ -1,4 +1,3 @@
-// src/app/(admin)/admin/reports/[reportId]/page.tsx
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
@@ -17,10 +16,15 @@ import {
   ArrowLeft,
   LoaderIcon,
   Settings,
+  Navigation,
 } from "lucide-react";
-import { useWasteAnalysis } from "@/hooks/useWasteAnalysis";
-import { useGetDispatch } from "@/hooks/useDispatch";
-import { useCreateAutoDispatch, useCreateManualDispatch } from "@/hooks/useDispatch";
+import { useAdminWasteAnalysis } from "@/hooks/useWasteAnalysis";
+import { 
+  useGetDispatches, 
+  useCreateAutoDispatch, 
+  useCreateManualDispatch,
+  useCanDispatch 
+} from "@/hooks/useDispatch";
 import { useState } from "react";
 import {
   Dialog,
@@ -41,15 +45,56 @@ import { Label } from "@/components/ui/label";
 import { useTeams } from "@/hooks/useTeams";
 import { useTrucks } from "@/hooks/useTruck";
 
+// Type definitions
+interface WasteCategory {
+  id: string;
+  waste_type: string;
+  waste_estimatedPercentage: number;
+}
+
+interface WasteUser {
+  user_fullName: string;
+  user_email: string;
+  user_phoneNumber?: string;
+}
+
+interface WasteAnalysis {
+  waste_id: string;
+  waste_imageURL: string;
+  waste_status: string;
+  waste_containsWaste: boolean;
+  waste_confidenceLevel?: string;
+  waste_overallCategory?: string;
+  waste_dominantWasteType?: string;
+  waste_estimatedVolumeValue?: number;
+  waste_estimatedVolumeUnit?: string;
+  waste_wasteCategories?: WasteCategory[];
+  waste_locationAddress?: string;
+  waste_locationLatitude: number;
+  waste_locationLongitude: number;
+  waste_user?: WasteUser;
+  waste_possibleSource?: string;
+  waste_environmentalImpact?: string;
+  waste_errorMessage?: string;
+  waste_createdAt: string;
+  waste_updatedAt: string;
+}
+
 export default function ReportDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const reportId = params.reportId as string;
 
-  const { data: waste, isLoading: wasteLoading } = useWasteAnalysis(reportId);
-  const { data: dispatch, isLoading: dispatchLoading } = useGetDispatch(
-    waste?._id || ""
+  const { data: waste, isLoading: wasteLoading } = useAdminWasteAnalysis(reportId);
+  
+  // Get all dispatches and filter for this waste report
+  const { data: dispatchesData } = useGetDispatches({ page: 1, limit: 100 });
+  const dispatch = dispatchesData?.data.find(
+    (d: any) => d.dispatch_wasteAnalysisId === reportId
   );
+
+  // Check if waste can be dispatched
+  const { data: canDispatchData } = useCanDispatch(reportId);
 
   const { createAutoDispatch, isCreatingAutoDispatch } = useCreateAutoDispatch();
   const { createManualDispatch, isCreatingManualDispatch } = useCreateManualDispatch();
@@ -63,19 +108,19 @@ export default function ReportDetailsPage() {
   const [scheduledDate, setScheduledDate] = useState("");
 
   const handleAutoDispatch = () => {
-    if (waste?._id) {
-      createAutoDispatch({ wasteAnalysisId: waste._id });
+    if (waste?.waste_id) {
+      createAutoDispatch({ wasteAnalysisId: waste.waste_id });
     }
   };
 
   const handleManualDispatch = () => {
-    if (!waste?._id || !selectedTeam || !selectedTruck) {
+    if (!waste?.waste_id || !selectedTeam || !selectedTruck) {
       return;
     }
 
     createManualDispatch(
       {
-        wasteAnalysisId: waste._id,
+        wasteAnalysisId: waste.waste_id,
         teamId: selectedTeam,
         truckId: selectedTruck,
         priority: selectedPriority,
@@ -96,8 +141,7 @@ export default function ReportDetailsPage() {
   // Filter trucks by selected team
   const availableTrucks = trucks?.filter((truck: any) => {
     if (!selectedTeam) return true;
-    const team = teams?.find((t: any) => t._id === selectedTeam);
-    return team?.team_trucks?.some((t: any) => t._id === truck._id || t === truck._id);
+    return truck.truck_assignedTeamId === selectedTeam;
   });
 
   const getStatusColor = (status: string) => {
@@ -143,6 +187,10 @@ export default function ReportDetailsPage() {
       minute: "2-digit",
     });
 
+  const formatStatus = (status: string) => {
+    return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
   if (wasteLoading) {
     return (
       <div className="min-h-screen bg-background pt-16 flex items-center justify-center">
@@ -175,6 +223,8 @@ export default function ReportDetailsPage() {
     );
   }
 
+  const canDispatch = canDispatchData?.canDispatch && waste.waste_status === "pending_dispatch";
+
   return (
     <div className="min-h-screen bg-background pt-16">
       <main className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
@@ -203,7 +253,7 @@ export default function ReportDetailsPage() {
               <h3 className="text-lg font-semibold mb-4">Waste Image</h3>
               <div className="relative rounded-lg overflow-hidden border-2 border-eco-primary/20">
                 <img
-                  src={waste.imageURL}
+                  src={waste.waste_imageURL}
                   alt="Waste"
                   className="w-full h-96 object-cover"
                 />
@@ -211,7 +261,7 @@ export default function ReportDetailsPage() {
                   variant="secondary"
                   size="sm"
                   className="absolute top-4 right-4"
-                  onClick={() => window.open(waste.imageURL, "_blank")}
+                  onClick={() => window.open(waste.waste_imageURL, "_blank")}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Open Full Size
@@ -220,34 +270,187 @@ export default function ReportDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Status */}
+          {/* Analysis Details */}
           <Card>
             <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Analysis Details</h3>
               <div className="grid gap-6 md:grid-cols-2">
+                {/* Status */}
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4" />
                     Status
                   </p>
-                  <Badge className={getStatusColor(waste.status)}>
-                    {waste.status.replace("_", " ").toUpperCase()}
+                  <Badge className={getStatusColor(waste.waste_status)}>
+                    {formatStatus(waste.waste_status)}
                   </Badge>
                 </div>
 
+                {/* Contains Waste */}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Contains Waste</p>
+                  <Badge variant={waste.waste_containsWaste ? "default" : "secondary"}>
+                    {waste.waste_containsWaste ? "Yes ✓" : "No ✗"}
+                  </Badge>
+                </div>
+
+                {/* Confidence Level */}
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Gauge className="h-4 w-4" />
                     Confidence Level
                   </p>
                   <p className="text-lg font-semibold text-eco-primary">
-                    {waste.confidenceLevel}
+                    {waste.waste_confidenceLevel || "N/A"}
                   </p>
+                </div>
+
+                {/* Overall Category */}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Overall Category</p>
+                  <p className="text-lg font-semibold capitalize">
+                    {waste.waste_overallCategory?.replace(/_/g, " ") || "General"}
+                  </p>
+                </div>
+
+                {/* Dominant Waste Type */}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Dominant Waste Type</p>
+                  <p className="text-lg font-semibold">
+                    {waste.waste_dominantWasteType || "Mixed Waste"}
+                  </p>
+                </div>
+
+                {/* Estimated Volume */}
+                {waste.waste_estimatedVolumeValue && waste.waste_estimatedVolumeUnit && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Estimated Volume</p>
+                    <p className="text-lg font-semibold">
+                      {waste.waste_estimatedVolumeValue} {waste.waste_estimatedVolumeUnit}
+                    </p>
+                  </div>
+                )}
+
+                {/* Waste Categories */}
+                {waste.waste_wasteCategories && waste.waste_wasteCategories.length > 0 && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm text-muted-foreground">Waste Categories Breakdown</p>
+                    <div className="flex flex-wrap gap-2">
+                      {waste.waste_wasteCategories.map((cat: WasteCategory) => (
+                        <Badge key={cat.id} variant="outline" className="text-xs">
+                          {cat.waste_type}: {cat.waste_estimatedPercentage}%
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Location */}
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Location
+                  </p>
+                  <p className="text-base">{waste.waste_locationAddress || "Unknown"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Coordinates: {waste.waste_locationLatitude.toFixed(6)}, {waste.waste_locationLongitude.toFixed(6)}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      window.open(
+                        `https://www.google.com/maps?q=${waste.waste_locationLatitude},${waste.waste_locationLongitude}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    <Navigation className="h-4 w-4 mr-2" />
+                    Open in Google Maps
+                  </Button>
+                </div>
+
+                {/* Reporter Information */}
+                {waste.waste_user && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm text-muted-foreground">Reported By</p>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="font-medium">{waste.waste_user.user_fullName || "Unknown User"}</p>
+                      <p className="text-sm text-muted-foreground">{waste.waste_user.user_email}</p>
+                      {waste.waste_user.user_phoneNumber && (
+                        <p className="text-sm text-muted-foreground">{waste.waste_user.user_phoneNumber}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Possible Source */}
+                {waste.waste_possibleSource && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Possible Source
+                    </p>
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-sm text-amber-900 dark:text-amber-200">
+                        {waste.waste_possibleSource}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Environmental Impact */}
+                {waste.waste_environmentalImpact && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      Environmental Impact
+                    </p>
+                    <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-900 dark:text-red-200">
+                        {waste.waste_environmentalImpact}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message if any */}
+                {waste.waste_errorMessage && (
+                  <div className="space-y-2 md:col-span-2">
+                    <p className="text-sm text-muted-foreground">Error Details</p>
+                    <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-700 dark:text-red-300">
+                        {waste.waste_errorMessage}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Timestamps */}
+                <div className="space-y-2 md:col-span-2 pt-4 border-t">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground flex items-center gap-2">
+                        <Calendar className="h-3 w-3" />
+                        Reported On
+                      </p>
+                      <p className="font-medium">{formatDate(waste.waste_createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground flex items-center gap-2">
+                        <Clock className="h-3 w-3" />
+                        Last Updated
+                      </p>
+                      <p className="font-medium">{formatDate(waste.waste_updatedAt)}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Dispatch */}
+          {/* Dispatch Section */}
           <Card>
             <CardContent className="p-6 space-y-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -255,20 +458,13 @@ export default function ReportDetailsPage() {
                 Dispatch Information
               </h3>
 
-              {dispatchLoading ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <LoaderIcon className="h-4 w-4 animate-spin" />
-                  <span>Loading dispatch info...</span>
-                </div>
-              ) : dispatch ? (
+              {dispatch ? (
                 <div className="space-y-4 bg-muted p-4 rounded-lg">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">Status</p>
-                      <Badge
-                        className={getDispatchStatusColor(dispatch.dispatch_status)}
-                      >
-                        {dispatch.dispatch_status.replace("_", " ").toUpperCase()}
+                      <Badge className={getDispatchStatusColor(dispatch.dispatch_status)}>
+                        {formatStatus(dispatch.dispatch_status)}
                       </Badge>
                     </div>
                     <div>
@@ -282,18 +478,14 @@ export default function ReportDetailsPage() {
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Assigned Team</p>
                     <p className="font-medium">
-                      {typeof dispatch.dispatch_assignedTeam === "object"
-                        ? dispatch.dispatch_assignedTeam.team_name
-                        : "N/A"}
+                      {dispatch.dispatch_assignedTeam?.team_name || "N/A"}
                     </p>
                   </div>
 
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Assigned Truck</p>
                     <p className="font-medium">
-                      {typeof dispatch.dispatch_assignedTruck === "object"
-                        ? dispatch.dispatch_assignedTruck.truck_registrationNumber
-                        : "N/A"}
+                      {dispatch.dispatch_assignedTruck?.truck_registrationNumber || "N/A"}
                     </p>
                   </div>
 
@@ -303,18 +495,67 @@ export default function ReportDetailsPage() {
                       {formatDate(dispatch.dispatch_scheduledDate)}
                     </p>
                   </div>
+
+                  {dispatch.dispatch_estimatedArrival && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Estimated Arrival</p>
+                      <p className="font-medium">
+                        {formatDate(dispatch.dispatch_estimatedArrival)}
+                      </p>
+                    </div>
+                  )}
+
+                  {dispatch.dispatch_actualCollectionDate && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Collection Date</p>
+                      <p className="font-medium text-green-600">
+                        {formatDate(dispatch.dispatch_actualCollectionDate)}
+                      </p>
+                    </div>
+                  )}
+
+                  {dispatch.dispatch_collectionNotes && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Collection Notes</p>
+                      <p className="text-sm">{dispatch.dispatch_collectionNotes}</p>
+                    </div>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/admin/dispatch`)}
+                    className="w-full mt-4"
+                  >
+                    View in Dispatch Manager
+                  </Button>
                 </div>
-              ) : waste.status === "pending_dispatch" ? (
+              ) : canDispatch ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     No dispatch assigned yet. Choose automatic or manual dispatch.
                   </p>
 
+                  {!canDispatchData?.canDispatch && canDispatchData && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-800">
+                          {canDispatchData.message}
+                        </p>
+                        {canDispatchData.details && (
+                          <p className="text-xs text-amber-700 mt-1">
+                            {canDispatchData.details}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid gap-3 md:grid-cols-2">
                     {/* Auto Dispatch Button */}
                     <Button
                       onClick={handleAutoDispatch}
-                      disabled={isCreatingAutoDispatch}
+                      disabled={isCreatingAutoDispatch || !canDispatch}
                       className="w-full bg-eco-primary hover:bg-eco-primary/90"
                     >
                       {isCreatingAutoDispatch ? (
@@ -333,7 +574,11 @@ export default function ReportDetailsPage() {
                     {/* Manual Dispatch Dialog */}
                     <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
                       <DialogTrigger asChild>
-                        <Button variant="outline" className="w-full">
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          disabled={!canDispatch}
+                        >
                           <Settings className="h-4 w-4 mr-2" />
                           Manual Dispatch
                         </Button>
@@ -356,7 +601,7 @@ export default function ReportDetailsPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 {teams?.map((team: any) => (
-                                  <SelectItem key={team._id} value={team._id}>
+                                  <SelectItem key={team.team_id} value={team.team_id}>
                                     {team.team_name} ({team.team_specialization})
                                   </SelectItem>
                                 ))}
@@ -377,8 +622,8 @@ export default function ReportDetailsPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 {availableTrucks?.map((truck: any) => (
-                                  <SelectItem key={truck._id} value={truck._id}>
-                                    {truck.truck_registrationNumber} ({truck.truck_status})
+                                  <SelectItem key={truck.truck_id} value={truck.truck_id}>
+                                    {truck.truck_registrationNumber} - {truck.truck_status}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -442,7 +687,7 @@ export default function ReportDetailsPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No dispatch information available.
+                  This waste report cannot be dispatched at this time.
                 </p>
               )}
             </CardContent>

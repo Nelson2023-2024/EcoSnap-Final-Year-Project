@@ -29,7 +29,6 @@ const ReportHistory = () => {
 
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Infinite scroll intersection observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -52,14 +51,13 @@ const ReportHistory = () => {
     };
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  // Flatten all pages into single reports array
   const reports = data?.pages.flatMap((page) => page.data) ?? [];
   const totalReports = data?.pages[0]?.total ?? 0;
   const completedReports = reports.filter(
-    (r) => r.status === "collected"
+    (r) => r.waste_status === "collected"
   ).length;
   const pendingReports = reports.filter(
-    (r) => r.status === "pending_dispatch" || r.status === "dispatched"
+    (r) => r.waste_status === "pending_dispatch" || r.waste_status === "dispatched"
   ).length;
 
   const getStatusColor = (status: string) => {
@@ -212,7 +210,7 @@ const ReportHistory = () => {
             <div className="space-y-4">
               {reports.map((report) => (
                 <Card
-                  key={report._id}
+                  key={report.waste_id}
                   className="border-border transition-all hover:shadow-lg"
                 >
                   <CardContent className="p-6">
@@ -220,8 +218,8 @@ const ReportHistory = () => {
                       {/* Image */}
                       <div className="h-32 w-full overflow-hidden rounded-lg border-2 border-eco-primary/20 md:h-24 md:w-32">
                         <img
-                          src={report.imageURL}
-                          alt={report.location.address}
+                          src={report.waste_imageURL}
+                          alt={report.waste_locationAddress || "Waste location"}
                           className="h-full w-full object-cover transition-transform hover:scale-105"
                         />
                       </div>
@@ -232,43 +230,40 @@ const ReportHistory = () => {
                           <div className="flex items-start justify-between gap-4">
                             <div>
                               <h3 className="font-semibold text-foreground text-lg">
-                                {report.dominantWasteType || "Waste Report"}
+                                {report.waste_dominantWasteType || "Waste Report"}
                               </h3>
                               <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                                 <div className="flex items-center gap-1">
                                   <MapPin className="h-4 w-4 text-eco-primary" />
-                                  <span>{report.location.address}</span>
+                                  <span>{report.waste_locationAddress || "Location not specified"}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Calendar className="h-4 w-4 text-eco-primary" />
-                                  <span>{formatDate(report.createdAt)}</span>
+                                  <span>{formatDate(report.waste_createdAt)}</span>
                                 </div>
                               </div>
                             </div>
-                            <Badge className={getStatusColor(report.status)}>
-                              {formatStatus(report.status)}
+                            <Badge className={getStatusColor(report.waste_status)}>
+                              {formatStatus(report.waste_status)}
                             </Badge>
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            {report.wasteCategories.map((category, index) => (
+                            {report.waste_wasteCategories.map((category, index) => (
                               <Badge
-                                key={`${category.type ?? "unknown"}-${
-                                  category.estimatedPercentage ?? "0"
-                                }-${index}`}
+                                key={`${category.waste_type}-${category.waste_estimatedPercentage}-${index}`}
                                 variant="outline"
                                 className="text-xs border-eco-primary/30 text-eco-primary"
                               >
-                                {category.type || "Unknown"} (
-                                {category.estimatedPercentage ?? 0}%)
+                                {category.waste_type} ({category.waste_estimatedPercentage}%)
                               </Badge>
                             ))}
                           </div>
 
-                          {report.estimatedVolume && (
+                          {report.waste_estimatedVolumeValue && (
                             <div className="text-sm text-muted-foreground">
-                              Est. Volume: {report.estimatedVolume.value}{" "}
-                              {report.estimatedVolume.unit}
+                              Est. Volume: {report.waste_estimatedVolumeValue}{" "}
+                              {report.waste_estimatedVolumeUnit}
                             </div>
                           )}
                         </div>
@@ -278,15 +273,15 @@ const ReportHistory = () => {
                             <span className="text-muted-foreground">
                               Confidence:{" "}
                             </span>
-                            <span className="font-semibold text-eco-primary capitalize">
-                              {report.confidenceLevel}
+                            <span className="font-semibold text-eco-primary">
+                              {report.waste_confidenceLevel || "N/A"}
                             </span>
                           </div>
                           <Button
                             variant="outline"
                             size="sm"
                             className="border-eco-primary text-eco-primary hover:bg-eco-primary hover:text-white"
-                            onClick={() => handleViewDetails(report._id)}
+                            onClick={() => handleViewDetails(report.waste_id)}
                           >
                             <Eye className="mr-2 h-4 w-4" />
                             View Details

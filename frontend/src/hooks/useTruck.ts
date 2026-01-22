@@ -2,6 +2,28 @@ import { API_URL } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
+interface AssignedTeam {
+  team_id: string;
+  team_name: string;
+  team_status: string;
+  team_specialization: string;
+}
+
+interface Truck {
+  truck_id: string;
+  truck_registrationNumber: string;
+  truck_imageURL: string | null;
+  truck_truckType: string;
+  truck_capacity: number;
+  truck_status: string;
+  truck_assignedTeamId: string | null;
+  truck_locationLongitude: number;
+  truck_locationLatitude: number;
+  truck_createdAt: string;
+  truck_updatedAt: string;
+  truck_assignedTeam: AssignedTeam | null;
+}
+
 // Get all trucks
 export function useTrucks() {
   return useQuery({
@@ -16,7 +38,7 @@ export function useTrucks() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck[];
     },
   });
 }
@@ -35,7 +57,7 @@ export function useTruck(id: string) {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck;
     },
     enabled: !!id,
   });
@@ -74,11 +96,16 @@ export function useCreateTruck() {
       }
 
       const data = await response.json();
-      return data.data;
+      return data.data as Truck;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       toast.success("Truck created successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create truck");
@@ -93,6 +120,7 @@ export function useUpdateTruck() {
   return useMutation({
     mutationFn: async ({
       id,
+      image,
       ...updateData
     }: {
       id: string;
@@ -101,29 +129,70 @@ export function useUpdateTruck() {
       capacity?: number;
       status?: string;
       assignedTeam?: string;
-      imageURL?: string;
+      image?: File; // Add image support
     }) => {
-      const response = await fetch(`${API_URL}/truck/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(updateData),
-      });
+      // Use FormData if image is provided
+      if (image) {
+        const formData = new FormData();
+        
+        if (updateData.registrationNumber) {
+          formData.append("registrationNumber", updateData.registrationNumber);
+        }
+        if (updateData.truckType) {
+          formData.append("truckType", updateData.truckType);
+        }
+        if (updateData.capacity !== undefined) {
+          formData.append("capacity", updateData.capacity.toString());
+        }
+        if (updateData.status) {
+          formData.append("status", updateData.status);
+        }
+        if (updateData.assignedTeam !== undefined) {
+          formData.append("assignedTeam", updateData.assignedTeam);
+        }
+        formData.append("image", image);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update truck");
+        const response = await fetch(`${API_URL}/truck/${id}`, {
+          method: "PUT",
+          credentials: "include",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update truck");
+        }
+
+        const data = await response.json();
+        return data.data as Truck;
+      } else {
+        // Use JSON if no image
+        const response = await fetch(`${API_URL}/truck/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(updateData),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update truck");
+        }
+
+        const data = await response.json();
+        return data.data as Truck;
       }
-
-      const data = await response.json();
-      return data.data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
-      queryClient.invalidateQueries({ queryKey: ["truck", data._id] });
+      queryClient.invalidateQueries({ queryKey: ["truck", data.truck_id] });
       toast.success("Truck updated successfully!");
+
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update truck");
@@ -153,6 +222,11 @@ export function useDeleteTruck() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trucks"] });
       toast.success("Truck deleted successfully!");
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete truck");

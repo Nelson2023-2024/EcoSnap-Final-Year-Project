@@ -159,7 +159,7 @@ export default function Products() {
   const handleEditProduct = (product: any) => {
     setSelectedProduct(product);
     setUpdateProductName(product.product_name);
-    setUpdateProductDescription(product.product_description);
+    setUpdateProductDescription(product.product_description || "");
     setUpdateProductPointsCost(product.product_pointsCost.toString());
     setUpdateProductStock(product.product_stock.toString());
     setUpdateProductIsAvailable(product.product_isAvailable ? "true" : "false");
@@ -183,7 +183,7 @@ export default function Products() {
 
     try {
       await updateProductMutation.mutateAsync({
-        id: selectedProduct._id,
+        id: selectedProduct.product_id,
         productName: updateProductName,
         productDescription: updateProductDescription,
         productPointsCost: Number(updateProductPointsCost),
@@ -228,7 +228,7 @@ export default function Products() {
                 Add Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Product</DialogTitle>
                 <DialogDescription>
@@ -335,7 +335,7 @@ export default function Products() {
             </DialogContent>
           </Dialog>
         </div>
-        <p className="text-center py-10">No products available. Add your first product!</p>
+        <p className="text-center py-10 text-muted-foreground">No products available. Add your first product!</p>
       </div>
     );
   }
@@ -356,7 +356,7 @@ export default function Products() {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Product</DialogTitle>
               <DialogDescription>
@@ -467,7 +467,7 @@ export default function Products() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {products.map((product: any) => (
           <Card
-            key={product._id}
+            key={product.product_id}
             className={`hover:shadow-lg transition-shadow overflow-hidden ${
               !product.product_isAvailable && "opacity-60"
             }`}
@@ -500,7 +500,7 @@ export default function Products() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(product._id, product.product_name)}
+                  onClick={() => handleDelete(product.product_id, product.product_name)}
                   disabled={deleteProductMutation.isPending}
                 >
                   <Trash2 className="h-4 w-4" />

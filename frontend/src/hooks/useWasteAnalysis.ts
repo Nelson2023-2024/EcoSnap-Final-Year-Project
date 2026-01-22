@@ -7,40 +7,42 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 
-// Types
+// Types matching Prisma schema
 interface WasteCategory {
-  type: string;
-  estimatedPercentage: number;
+  id: string;
+  waste_type: string;
+  waste_estimatedPercentage: number;
+  wasteAnalysisId: string;
+}
+
+interface User {
+  user_id: string;
+  user_fullName: string | null;
+  user_email: string;
+  user_phoneNumber?: string | null;
 }
 
 interface WasteAnalysisItem {
-  _id: string;
-  analysedBy: string;
-  imageURL: string;
-  containsWaste: boolean;
-  wasteCategories: WasteCategory[];
-  dominantWasteType: string | null;
-  estimatedVolume: {
-    value: number;
-    unit: "kg" | "liters" | "cubic_meters";
-  };
-  possibleSource: string;
-  environmentalImpact: string;
-  confidenceLevel: string;
-  status:
-    | "pending_dispatch"
-    | "dispatched"
-    | "collected"
-    | "no_waste"
-    | "error";
-  errorMessage: string | null;
-  location: {
-    type: "Point";
-    coordinates: [number, number];
-    address: string;
-  };
-  createdAt: string;
-  updatedAt: string;
+  waste_id: string;
+  waste_analysedBy: string;
+  waste_imageURL: string;
+  waste_containsWaste: boolean;
+  waste_overallCategory: "general" | "recyclables" | "e_waste" | "organic" | "hazardous" | null;
+  waste_dominantWasteType: string | null;
+  waste_estimatedVolumeValue: number | null;
+  waste_estimatedVolumeUnit: "kg" | "liters" | "cubic_meters" | null;
+  waste_possibleSource: string | null;
+  waste_environmentalImpact: string | null;
+  waste_confidenceLevel: string | null;
+  waste_status: "pending_dispatch" | "dispatched" | "collected" | "no_waste" | "error";
+  waste_errorMessage: string | null;
+  waste_locationLongitude: number;
+  waste_locationLatitude: number;
+  waste_locationAddress: string | null;
+  waste_createdAt: string;
+  waste_updatedAt: string;
+  waste_wasteCategories: WasteCategory[];
+  waste_user?: User;
 }
 
 interface WasteAnalysisResponse {
@@ -108,14 +110,18 @@ export function useAnalyzeWaste() {
       return data;
     },
     onSuccess: (data) => {
-      // Method 1: Invalidate with refetchType to ensure active queries refetch
       queryClient.invalidateQueries({
         queryKey: ["wasteAnalysis", "history"],
-        refetchType: "active", // This ensures active queries are refetched immediately
+        refetchType: "active",
       });
 
       queryClient.invalidateQueries({ queryKey: ["authUser"] });
       queryClient.invalidateQueries({ queryKey: ["user-dashboard"] });
+
+      // ✅ Invalidate notifications directly
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notification-stats"] });
       toast.success(
         `${data.message} You earned ${data.pointsAwarded} points!`,
         {
@@ -155,30 +161,32 @@ export function useWasteAnalysisHistoryInfinite(limit = 10) {
         ? lastPage.page + 1
         : undefined;
     },
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 }
 
-export function useWasteAnalysis(id: string | undefined) {
-  return useQuery<WasteAnalysisItem, Error>({
+// Get single waste analysis (with admin support)
+export function useWasteAnalysis(id: string, isAdmin: boolean = true) {
+  return useQuery({
     queryKey: ["wasteAnalysis", id],
-    enabled: !!id, // Prevents running before id exists
-
     queryFn: async () => {
-      const res = await fetch(`${API_URL}/waste-analysis/${id}`, {
+      // Use admin endpoint if isAdmin flag is true
+      const endpoint = isAdmin 
+        ? `${API_URL}/waste-analysis/admin/${id}`
+        : `${API_URL}/waste-analysis/${id}`;
+        
+      const response = await fetch(endpoint, {
         credentials: "include",
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to fetch report");
+      if (!response.ok) {
+        throw new Error("Failed to fetch waste analysis");
       }
 
-      const json: SingleWasteAnalysisResponse = await res.json();
-      return json.data;
+      const data = await response.json();
+      return data.data;
     },
-
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    enabled: !!id,
   });
 }
 
@@ -208,6 +216,27 @@ export function useAdminWasteReportsInfinite(limit = 10) {
         : undefined;
     },
 
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+
+// Add to useWasteAnalysis.ts
+export function useAdminWasteAnalysis(id: string) {
+  return useQuery({
+    queryKey: ["adminWasteAnalysis", id],
+    queryFn: async () => {
+      const response = await fetch(`${API_URL}/waste-analysis/admin/${id}`, {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch waste analysis");
+      }
+
+      const data = await response.json();
+      return data.data;
+    },
+    enabled: !!id,
   });
 }

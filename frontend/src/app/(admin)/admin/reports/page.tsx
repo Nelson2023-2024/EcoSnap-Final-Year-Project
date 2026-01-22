@@ -68,16 +68,16 @@ const AdminWasteReports = () => {
   const reports =
     statusFilter === "all"
       ? allReports
-      : allReports.filter((r) => r.status === statusFilter);
+      : allReports.filter((r) => r.waste_status === statusFilter);
 
   const completedReports = allReports.filter(
-    (r) => r.status === "collected"
+    (r) => r.waste_status === "collected"
   ).length;
   const pendingReports = allReports.filter(
-    (r) => r.status === "pending_dispatch" || r.status === "dispatched"
+    (r) => r.waste_status === "pending_dispatch" || r.waste_status === "dispatched"
   ).length;
   const dispatchedReports = allReports.filter(
-    (r) => r.status === "dispatched"
+    (r) => r.waste_status === "dispatched"
   ).length;
 
   const getStatusColor = (status: string) => {
@@ -262,6 +262,7 @@ const AdminWasteReports = () => {
                       <TableRow className="border-border">
                         <TableHead className="w-24">Image</TableHead>
                         <TableHead>Waste Type</TableHead>
+                        <TableHead>Reporter</TableHead>
                         <TableHead>Location</TableHead>
                         <TableHead>Volume</TableHead>
                         <TableHead>Status</TableHead>
@@ -274,7 +275,7 @@ const AdminWasteReports = () => {
                     <TableBody>
                       {reports.map((report) => (
                         <TableRow
-                          key={`${report._id}-${report.createdAt}`}
+                          key={report.waste_id}
                           className="border-border hover:bg-muted/50"
                         >
                           {/* IMAGE */}
@@ -282,11 +283,11 @@ const AdminWasteReports = () => {
                             <div
                               className="h-16 w-16 overflow-hidden rounded-lg border-2 border-eco-primary/20 cursor-pointer"
                               onClick={() =>
-                                window.open(report.imageURL, "_blank")
+                                window.open(report.waste_imageURL, "_blank")
                               }
                             >
                               <img
-                                src={report.imageURL}
+                                src={report.waste_imageURL}
                                 alt="Waste"
                                 className="h-full w-full object-cover transition-transform hover:scale-110"
                               />
@@ -297,34 +298,45 @@ const AdminWasteReports = () => {
                           <TableCell>
                             <div className="space-y-1">
                               <p className="font-medium text-foreground">
-                                {report.dominantWasteType || "Mixed Waste"}
+                                {report.waste_dominantWasteType || "Mixed Waste"}
                               </p>
 
-                              {report.wasteCategories?.length > 0 && (
+                              {report.waste_wasteCategories?.length > 0 && (
                                 <div className="flex flex-wrap gap-1">
-                                  {report.wasteCategories
+                                  {report.waste_wasteCategories
                                     .slice(0, 2)
                                     .map((cat, idx) => (
                                       <Badge
-                                        key={idx}
+                                        key={cat.id}
                                         variant="outline"
                                         className="text-xs border-eco-primary/30 text-eco-primary"
                                       >
-                                        {cat.type} ({cat.estimatedPercentage}
-                                        %)
+                                        {cat.waste_type} ({cat.waste_estimatedPercentage}%)
                                       </Badge>
                                     ))}
 
-                                  {report.wasteCategories.length > 2 && (
+                                  {report.waste_wasteCategories.length > 2 && (
                                     <Badge
                                       variant="outline"
                                       className="text-xs"
                                     >
-                                      +{report.wasteCategories.length - 2} more
+                                      +{report.waste_wasteCategories.length - 2} more
                                     </Badge>
                                   )}
                                 </div>
                               )}
+                            </div>
+                          </TableCell>
+
+                          {/* REPORTER */}
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">
+                                {report.waste_user?.user_fullName || "Unknown"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {report.waste_user?.user_email || "N/A"}
+                              </p>
                             </div>
                           </TableCell>
 
@@ -333,17 +345,17 @@ const AdminWasteReports = () => {
                             <div className="flex items-start gap-1 max-w-xs">
                               <MapPin className="h-4 w-4 text-eco-primary mt-0.5 flex-shrink-0" />
                               <span className="text-sm text-muted-foreground line-clamp-2">
-                                {report.location?.address || "Unknown"}
+                                {report.waste_locationAddress || "Unknown"}
                               </span>
                             </div>
                           </TableCell>
 
                           {/* VOLUME */}
                           <TableCell>
-                            {report.estimatedVolume ? (
+                            {report.waste_estimatedVolumeValue && report.waste_estimatedVolumeUnit ? (
                               <span className="text-sm text-foreground">
-                                {report.estimatedVolume.value}{" "}
-                                {report.estimatedVolume.unit}
+                                {report.waste_estimatedVolumeValue}{" "}
+                                {report.waste_estimatedVolumeUnit}
                               </span>
                             ) : (
                               <span className="text-sm text-muted-foreground">
@@ -354,22 +366,22 @@ const AdminWasteReports = () => {
 
                           {/* STATUS */}
                           <TableCell>
-                            <Badge className={getStatusColor(report.status)}>
-                              {formatStatus(report.status)}
+                            <Badge className={getStatusColor(report.waste_status)}>
+                              {formatStatus(report.waste_status)}
                             </Badge>
                           </TableCell>
 
                           {/* CONFIDENCE */}
                           <TableCell>
                             <span className="text-sm font-medium text-eco-primary">
-                              {report.confidenceLevel || "N/A"}
+                              {report.waste_confidenceLevel || "N/A"}
                             </span>
                           </TableCell>
 
                           {/* DATE */}
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {formatDate(report.createdAt)}
+                              {formatDate(report.waste_createdAt)}
                             </span>
                           </TableCell>
 
@@ -380,18 +392,18 @@ const AdminWasteReports = () => {
                                 variant="outline"
                                 size="sm"
                                 className="border-eco-primary text-eco-primary hover:bg-eco-primary hover:text-white"
-                                onClick={() => handleViewDetails(report._id)}
+                                onClick={() => handleViewDetails(report.waste_id)}
                                 title="View Details"
                               >
                                 <Info className="h-4 w-4" />
                               </Button>
 
-                              {report.status === "pending_dispatch" && (
+                              {report.waste_status === "pending_dispatch" && (
                                 <Button
                                   variant="default"
                                   size="sm"
                                   className="bg-blue-600 hover:bg-blue-700"
-                                  onClick={() => handleDispatch(report._id)}
+                                  onClick={() => handleDispatch(report.waste_id)}
                                   disabled={isCreatingAutoDispatch}
                                   title="Create Dispatch"
                                 >

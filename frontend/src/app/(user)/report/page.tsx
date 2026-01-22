@@ -17,7 +17,6 @@ const ReportWaste = () => {
 
   const { analyzeWaste, isAnalyzing, data: analysisData } = useAnalyzeWaste();
   
-  // Add infinite scroll hook
   const {
     data: historyData,
     fetchNextPage,
@@ -26,7 +25,6 @@ const ReportWaste = () => {
     isLoading: isLoadingHistory,
   } = useWasteAnalysisHistoryInfinite(10);
 
-  // Intersection observer for infinite scroll
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -136,21 +134,10 @@ const ReportWaste = () => {
         longitude: lng,
         address: location,
       },
-      {
-        onSuccess: () => {
-          // Reset form after successful submission
-          setImageFile(null);
-          setImagePreview(null);
-          setLocation("");
-          setGpsLocation(null);
-        },
-      }
     );
   };
 
   const analysis = analysisData?.data;
-  
-  // Flatten all pages of history data
   const allReports = historyData?.pages.flatMap((page) => page.data) || [];
 
   return (
@@ -254,7 +241,7 @@ const ReportWaste = () => {
             </div>
           </Card>
 
-          {/* Analysis Results - Latest or Current */}
+          {/* Analysis Results */}
           <Card className="p-6 border-border transition-all hover:shadow-md">
             <h2 className="text-2xl font-bold mb-6 text-foreground">
               {analysis ? "Latest Analysis" : "AI Analysis"}
@@ -276,17 +263,17 @@ const ReportWaste = () => {
 
             {analysis && (
               <div className="space-y-4">
-                {analysis.containsWaste ? (
+                {analysis.waste_containsWaste ? (
                   <>
                     <div>
                       <h3 className="font-semibold mb-3 text-foreground">Materials Detected:</h3>
-                      {analysis.wasteCategories.map((category, i) => (
-                        <Card key={i} className="p-3 mb-2 bg-muted/50 border-border">
+                      {analysis.waste_wasteCategories.map((category) => (
+                        <Card key={category.id} className="p-3 mb-2 bg-muted/50 border-border">
                           <div className="flex justify-between items-start">
                             <div>
-                              <p className="font-medium text-foreground">{category.type}</p>
+                              <p className="font-medium text-foreground">{category.waste_type}</p>
                               <p className="text-sm text-muted-foreground">
-                                Percentage: {category.estimatedPercentage}%
+                                Percentage: {category.waste_estimatedPercentage}%
                               </p>
                             </div>
                           </div>
@@ -294,33 +281,44 @@ const ReportWaste = () => {
                       ))}
                     </div>
 
-                    {analysis.dominantWasteType && (
+                    {analysis.waste_overallCategory && (
+                      <div className="pt-2">
+                        <h3 className="font-semibold text-foreground">Overall Category:</h3>
+                        <p className="text-sm text-muted-foreground capitalize">
+                          {analysis.waste_overallCategory.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                    )}
+
+                    {analysis.waste_dominantWasteType && (
                       <div className="pt-2">
                         <h3 className="font-semibold text-foreground">Dominant Waste Type:</h3>
-                        <p className="text-sm text-muted-foreground">{analysis.dominantWasteType}</p>
+                        <p className="text-sm text-muted-foreground">{analysis.waste_dominantWasteType}</p>
+                      </div>
+                    )}
+
+                    {analysis.waste_estimatedVolumeValue && (
+                      <div>
+                        <h3 className="font-semibold text-foreground">Estimated Volume:</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {analysis.waste_estimatedVolumeValue} {analysis.waste_estimatedVolumeUnit}
+                        </p>
                       </div>
                     )}
 
                     <div>
-                      <h3 className="font-semibold text-foreground">Estimated Volume:</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {analysis.estimatedVolume.value} {analysis.estimatedVolume.unit}
-                      </p>
-                    </div>
-
-                    <div>
                       <h3 className="font-semibold text-foreground">Possible Source:</h3>
-                      <p className="text-sm text-muted-foreground">{analysis.possibleSource}</p>
+                      <p className="text-sm text-muted-foreground">{analysis.waste_possibleSource || "Unknown"}</p>
                     </div>
 
                     <div>
                       <h3 className="font-semibold text-foreground">Environmental Impact:</h3>
-                      <p className="text-sm text-muted-foreground">{analysis.environmentalImpact}</p>
+                      <p className="text-sm text-muted-foreground">{analysis.waste_environmentalImpact || "Not assessed"}</p>
                     </div>
 
                     <div>
                       <h3 className="font-semibold text-foreground">Confidence Level:</h3>
-                      <p className="text-sm text-muted-foreground">{analysis.confidenceLevel}</p>
+                      <p className="text-sm text-muted-foreground">{analysis.waste_confidenceLevel || "0%"}</p>
                     </div>
 
                     <div className="bg-gradient-to-r from-eco-primary/20 to-eco-success/20 p-4 rounded-lg border border-eco-primary/30">
@@ -329,7 +327,7 @@ const ReportWaste = () => {
                     </div>
 
                     <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                      ✓ Status: {analysis.status.replace(/_/g, " ").toUpperCase()}
+                      ✓ Status: {analysis.waste_status.replace(/_/g, " ").toUpperCase()}
                     </p>
                   </>
                 ) : (
@@ -337,8 +335,8 @@ const ReportWaste = () => {
                     <p className="text-lg font-medium text-muted-foreground">
                       No waste detected in this image
                     </p>
-                    {analysis.errorMessage && (
-                      <p className="text-sm text-destructive mt-2">{analysis.errorMessage}</p>
+                    {analysis.waste_errorMessage && (
+                      <p className="text-sm text-destructive mt-2">{analysis.waste_errorMessage}</p>
                     )}
                   </div>
                 )}
@@ -346,8 +344,6 @@ const ReportWaste = () => {
             )}
           </Card>
         </div>
-
-  
       </div>
     </div>
   );

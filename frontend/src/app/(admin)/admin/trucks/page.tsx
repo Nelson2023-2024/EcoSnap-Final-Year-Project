@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type TruckType = "general" | "recyclables" | "e-waste" | "organic" | "hazardous";
+type TruckType = "general" | "recyclables" | "e_waste" | "organic" | "hazardous";
 type TruckStatus = "available" | "in_use" | "maintenance";
 
 export default function Trucks() {
@@ -43,8 +43,9 @@ export default function Trucks() {
   const deleteTruckMutation = useDeleteTruck();
   const updateTruckMutation = useUpdateTruck();
 
-  // File input ref
+  // File input refs
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const updateFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -63,6 +64,8 @@ export default function Trucks() {
   const [updateCapacity, setUpdateCapacity] = React.useState("");
   const [updateStatus, setUpdateStatus] = React.useState<TruckStatus>("available");
   const [updateAssignedTeam, setUpdateAssignedTeam] = React.useState<string>("");
+  const [updateImageFile, setUpdateImageFile] = React.useState<File | null>(null);
+  const [updateImagePreview, setUpdateImagePreview] = React.useState<string>("");
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,6 +87,26 @@ export default function Trucks() {
     }
   };
 
+  const handleUpdateImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size should be less than 5MB");
+        return;
+      }
+      setUpdateImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUpdateImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreview("");
@@ -92,8 +115,20 @@ export default function Trucks() {
     }
   };
 
+  const handleRemoveUpdateImage = () => {
+    setUpdateImageFile(null);
+    setUpdateImagePreview("");
+    if (updateFileInputRef.current) {
+      updateFileInputRef.current.value = "";
+    }
+  };
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
+  };
+
+  const triggerUpdateFileInput = () => {
+    updateFileInputRef.current?.click();
   };
 
   const handleCreateTruck = async (e: React.FormEvent) => {
@@ -147,7 +182,12 @@ export default function Trucks() {
     setUpdateTruckType(truck.truck_truckType as TruckType);
     setUpdateCapacity(truck.truck_capacity.toString());
     setUpdateStatus(truck.truck_status);
-    setUpdateAssignedTeam(truck.truck_assignedTeam?._id || "none");
+    setUpdateAssignedTeam(truck.truck_assignedTeamId || "none");
+    setUpdateImageFile(null);
+    setUpdateImagePreview("");
+    if (updateFileInputRef.current) {
+      updateFileInputRef.current.value = "";
+    }
     setUpdateDialogOpen(true);
   };
 
@@ -161,15 +201,18 @@ export default function Trucks() {
 
     try {
       await updateTruckMutation.mutateAsync({
-        id: selectedTruck._id,
+        id: selectedTruck.truck_id,
         registrationNumber: updateRegistrationNumber,
         truckType: updateTruckType,
         capacity: Number(updateCapacity),
         status: updateStatus,
         assignedTeam: updateAssignedTeam && updateAssignedTeam !== "none" ? updateAssignedTeam : undefined,
+        image: updateImageFile || undefined,
       });
       setUpdateDialogOpen(false);
       setSelectedTruck(null);
+      setUpdateImageFile(null);
+      setUpdateImagePreview("");
     } catch (err) {
       // Error is already handled in the hook
     }
@@ -192,7 +235,7 @@ export default function Trucks() {
     switch (type) {
       case "recyclables":
         return "bg-accent/20 text-accent-foreground";
-      case "e-waste":
+      case "e_waste":
         return "bg-yellow-200 text-yellow-900";
       case "organic":
         return "bg-green-200 text-green-900";
@@ -203,6 +246,14 @@ export default function Trucks() {
       default:
         return "bg-muted text-muted-foreground";
     }
+  };
+
+  const formatType = (type: string) => {
+    return type.replace(/_/g, "-").replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const formatStatus = (status: string) => {
+    return status.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
   };
 
   if (isLoading) {
@@ -289,7 +340,7 @@ export default function Trucks() {
                 <SelectLabel>Type</SelectLabel>
                 <SelectItem value="general">General</SelectItem>
                 <SelectItem value="recyclables">Recyclables</SelectItem>
-                <SelectItem value="e-waste">E-Waste</SelectItem>
+                <SelectItem value="e_waste">E-Waste</SelectItem>
                 <SelectItem value="organic">Organic</SelectItem>
                 <SelectItem value="hazardous">Hazardous</SelectItem>
               </SelectGroup>
@@ -320,7 +371,7 @@ export default function Trucks() {
               <SelectLabel>Teams</SelectLabel>
               <SelectItem value="none">None</SelectItem>
               {teams?.map((team: any) => (
-                <SelectItem key={team._id} value={team._id}>
+                <SelectItem key={team.team_id} value={team.team_id}>
                   {team.team_name}
                 </SelectItem>
               ))}
@@ -366,7 +417,7 @@ export default function Trucks() {
             </DialogContent>
           </Dialog>
         </div>
-        <p className="text-center py-10">No trucks available. Add your first truck!</p>
+        <p className="text-center py-10 text-muted-foreground">No trucks available. Add your first truck!</p>
       </div>
     );
   }
@@ -401,7 +452,7 @@ export default function Trucks() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {trucks.map((truck: any) => (
-          <Card key={truck._id} className="hover:shadow-lg transition-shadow overflow-hidden">
+          <Card key={truck.truck_id} className="hover:shadow-lg transition-shadow overflow-hidden">
             {truck.truck_imageURL && (
               <div className="relative w-full h-48">
                 <Image
@@ -431,7 +482,7 @@ export default function Trucks() {
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() =>
-                    handleDelete(truck._id, truck.truck_registrationNumber)
+                    handleDelete(truck.truck_id, truck.truck_registrationNumber)
                   }
                   disabled={deleteTruckMutation.isPending}
                 >
@@ -447,10 +498,10 @@ export default function Trucks() {
                     truck.truck_truckType
                   )}`}
                 >
-                  {truck.truck_truckType}
+                  {formatType(truck.truck_truckType)}
                 </span>
                 <Badge variant={getStatusColor(truck.truck_status)}>
-                  {truck.truck_status.replace("_", " ")}
+                  {formatStatus(truck.truck_status)}
                 </Badge>
               </div>
 
@@ -493,6 +544,72 @@ export default function Trucks() {
           </DialogHeader>
 
           <form className="grid gap-4" onSubmit={handleUpdateSubmit}>
+            {/* Image Update Section */}
+            <div className="grid gap-3">
+              <Label>Truck Image (Optional)</Label>
+              <div className="flex flex-col gap-3">
+                {updateImagePreview ? (
+                  <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+                    <Image
+                      src={updateImagePreview}
+                      alt="New truck image"
+                      fill
+                      className="object-cover"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={handleRemoveUpdateImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : selectedTruck?.truck_imageURL ? (
+                  <div className="relative w-full h-48 border rounded-lg overflow-hidden">
+                    <Image
+                      src={selectedTruck.truck_imageURL}
+                      alt="Current truck image"
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={triggerUpdateFileInput}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Change Image
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                    onClick={triggerUpdateFileInput}
+                  >
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload new truck image
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      PNG, JPG up to 5MB
+                    </p>
+                  </div>
+                )}
+                <Input
+                  ref={updateFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUpdateImageChange}
+                />
+              </div>
+            </div>
+
             <div className="grid gap-3">
               <Label htmlFor="update-registrationNumber">Registration Number</Label>
               <Input
@@ -518,7 +635,7 @@ export default function Trucks() {
                       <SelectLabel>Type</SelectLabel>
                       <SelectItem value="general">General</SelectItem>
                       <SelectItem value="recyclables">Recyclables</SelectItem>
-                      <SelectItem value="e-waste">E-Waste</SelectItem>
+                      <SelectItem value="e_waste">E-Waste</SelectItem>
                       <SelectItem value="organic">Organic</SelectItem>
                       <SelectItem value="hazardous">Hazardous</SelectItem>
                     </SelectGroup>
@@ -569,7 +686,7 @@ export default function Trucks() {
                     <SelectLabel>Teams</SelectLabel>
                     <SelectItem value="none">None</SelectItem>
                     {teams?.map((team: any) => (
-                      <SelectItem key={team._id} value={team._id}>
+                      <SelectItem key={team.team_id} value={team.team_id}>
                         {team.team_name}
                       </SelectItem>
                     ))}

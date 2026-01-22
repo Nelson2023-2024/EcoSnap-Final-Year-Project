@@ -21,6 +21,7 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthUser, useLogout } from "@/hooks/useAuth";
+import { useUnreadCount } from "@/hooks/useNotification";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -37,6 +39,7 @@ const Navbar = () => {
   const pathname = usePathname();
   const { data: user, isLoading } = useAuthUser();
   const { logout, isLoggingOut } = useLogout();
+  const { data: unreadCount } = useUnreadCount();
 
   const navItems = [
     { title: "Dashboard", href: "/user-dashboard", icon: Home },
@@ -45,12 +48,17 @@ const Navbar = () => {
     { title: "Rewards", href: "/rewards", icon: Gift },
   ];
 
+  const hasUnreadNotifications = unreadCount && unreadCount > 0;
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href={user ? "/user-dashboard" : "/"} className="flex items-center gap-2">
+          <Link
+            href={user ? "/user-dashboard" : "/"}
+            className="flex items-center gap-2"
+          >
             <div className="w-10 h-10 rounded-full bg-eco-primary flex items-center justify-center">
               <Leaf className="w-6 h-6 text-white" />
             </div>
@@ -106,7 +114,10 @@ const Navbar = () => {
             ) : user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Button
+                    variant="ghost"
+                    className="relative h-10 w-10 rounded-full"
+                  >
                     <Avatar className="h-10 w-10">
                       <AvatarImage
                         src={user.profileImage || ""}
@@ -116,12 +127,20 @@ const Navbar = () => {
                         {user.fullName?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
+                    {/* Notification Badge on Avatar */}
+                    {hasUnreadNotifications && (
+                      <span className="absolute top-0 right-0 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white border-2 border-background">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.fullName}</p>
+                      <p className="text-sm font-medium leading-none">
+                        {user.fullName}
+                      </p>
                       <p className="text-xs leading-none text-muted-foreground">
                         {user.email}
                       </p>
@@ -136,12 +155,28 @@ const Navbar = () => {
                   </Link>
                   <Link href="/notifications">
                     <DropdownMenuItem>
-                      <Bell className="mr-2 h-4 w-4" />
+                      <div className="relative mr-2">
+                        <Bell className="h-4 w-4" />
+                        {hasUnreadNotifications && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500"></span>
+                        )}
+                      </div>
                       <span>Notifications</span>
+                      {hasUnreadNotifications && (
+                        <Badge
+                          variant="destructive"
+                          className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Badge>
+                      )}
                     </DropdownMenuItem>
                   </Link>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => logout()} disabled={isLoggingOut}>
+                  <DropdownMenuItem
+                    onClick={() => logout()}
+                    disabled={isLoggingOut}
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
                   </DropdownMenuItem>
@@ -166,13 +201,21 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-foreground"
+            className="md:hidden p-2 text-foreground relative"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             {isMenuOpen ? (
               <X className="w-6 h-6" />
             ) : (
-              <Menu className="w-6 h-6" />
+              <>
+                <Menu className="w-6 h-6" />
+                {/* Notification Badge on Mobile Menu Button */}
+                {user && hasUnreadNotifications && (
+                  <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </>
             )}
           </button>
         </div>
@@ -236,10 +279,29 @@ const Navbar = () => {
                       Profile
                     </Button>
                   </Link>
-                  <Link href="/notifications" onClick={() => setIsMenuOpen(false)}>
-                    <Button variant="ghost" className="w-full justify-start">
-                      <Bell className="mr-2 w-4 h-4" />
-                      Notifications
+                  <Link
+                    href="/notifications"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start relative"
+                    >
+                      <div className="relative mr-2">
+                        <Bell className="w-4 h-4" />
+                        {hasUnreadNotifications && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-red-500"></span>
+                        )}
+                      </div>
+                      <span>Notifications</span>
+                      {hasUnreadNotifications && (
+                        <Badge
+                          variant="destructive"
+                          className="ml-auto h-5 min-w-5 px-1.5 text-xs"
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Badge>
+                      )}
                     </Button>
                   </Link>
                   <Button

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useGoogleLogin, useAuthUser } from "@/hooks/useAuth";
-import { Loader2 } from "lucide-react";
+import { LoaderIcon } from "lucide-react";
 
 export default function LoginForm() {
   const { loginWithGoogle } = useGoogleLogin();
@@ -36,7 +36,7 @@ export default function LoginForm() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-eco-primary/10 via-background to-eco-success/10">
-        <Loader2 className="h-12 w-12 animate-spin text-eco-primary" />
+        <LoaderIcon className="h-12 w-12 animate-spin text-eco-primary" />
       </div>
     );
   }
